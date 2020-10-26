@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
+# import sys
 import cv2
-video = "demo.mp4"
+
+# sys.path.append("./videoSrc/")
+video = "./videoSrc/demo.mp4"
 result_video = "demo-result.mp4"
 #读取视频
 cap = cv2.VideoCapture(video)
+print("read done")
 #获取视频帧率
 fps_video = cap.get(cv2.CAP_PROP_FPS)
 #设置写入视频的编码格式
@@ -14,9 +18,16 @@ frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 #获取视频高度
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 videoWriter = cv2.VideoWriter(result_video, fourcc, fps_video, (frame_width, frame_height))
+
+print(fourcc)
+print(frame_width)
+print(frame_height)
+
 frame_id = 0
+print("transfer")
 while (cap.isOpened()):
     ret, frame = cap.read()
+    # print("read")
     if ret == True:
         frame_id += 1
         left_x_up = int(frame_width / frame_id)
