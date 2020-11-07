@@ -4,10 +4,11 @@ from matplotlib import pyplot as plt
 from testHistogram import calcAndDrawHist
 # %matplotlib inline 
 
-# pic_file = '../videoSrc/test.png'
-pic_file = '../videoSrc/gaomu.jpeg'
+pic_file = '../videoSrc/test.png'
 
-img_bgr = cv2.imread(pic_file, cv2.IMREAD_COLOR) #OpenCV读取颜色顺序：BRG 
+# pic_file = '../videoSrc/test.jpeg'
+
+img_bgr = cv2.imread(pic_file, cv2.IMREAD_COLOR)
 # img_b = img_bgr[..., 0]
 # img_g = img_bgr[..., 1]
 # img_r = img_bgr[..., 2]
@@ -77,23 +78,23 @@ img_bgr = cv2.imread(pic_file, cv2.IMREAD_COLOR) #OpenCV读取颜色顺序：BRG
 # plt.xlabel('Bins')
 # plt.ylabel('# of Pixels')
 # plt.show()
-color = ('r', 'g', 'b')
-plt.subplot(221)
-for i, col in enumerate(color):
-    histr = cv2.calcHist([img_bgr], [i], None, [256 / 8], [0, 255])
-    print(histr.shape)
-    print(len(histr))
-    plt.plot(histr, color = col)
-    plt.xlim([0, 256 / 8 - 1])
+# color = ('r', 'g', 'b')
+# plt.subplot(221)
+# for i, col in enumerate(color):
+#     histr = cv2.calcHist([img_bgr], [i], None, [256 / 8], [0, 255])
+#     print(histr.shape)
+#     print(len(histr))
+#     plt.plot(histr, color = col)
+#     plt.xlim([0, 256 / 8])
 
-plt.subplot(222)
-for i, col in enumerate(color):
-    histr = cv2.calcHist([img_bgr], [i], None, [256], [0, 255])
-    print(histr.shape)
-    print(len(histr))
-    plt.plot(histr, color = col)
-    plt.xlim([0, 256])
-plt.show()
+# plt.subplot(222)
+# for i, col in enumerate(color):
+#     histr = cv2.calcHist([img_bgr], [i], None, [256], [0, 255])
+#     print(histr.shape)
+#     print(len(histr))
+#     plt.plot(histr, color = col)
+#     plt.xlim([0, 256])
+# plt.show()
 
 # import cv2 as cv
 # import numpy as np
@@ -116,13 +117,32 @@ plt.show()
 # result2 = np.hstack((img, equ2))
 # cv2.imwrite('bgr_equ.png', result2)
 
-# img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-# (l, a, b) = cv2.split(img_lab)
-# lH = cv2.equalizeHist(l)
-# aH = cv2.equalizeHist(a)
-# bH = cv2.equalizeHist(b)
 
-# equ3 = cv2.merge((lH, aH, bH))
-# result3 = np.hstack((img_lab, equ3))
-# result4 = cv2.cvtColor(result3, cv2.COLOR_LAB2BGR)
-# cv2.imwrite('lab_equ.png', result4)
+img_lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+(l, a, b) = cv2.split(img_lab)
+# t = np.full(a.shape, 127, dtype = a.dtype)
+# l += 40
+# l -= 40
+# a -= 0
+# a -= a
+# a += 40
+# b += 40
+# print(l.shape)
+average_l = np.mean(l)
+average_a = np.mean(a)
+average_b = np.mean(b)
+average_a = 256 - average_a
+average_b = 256 - average_b
+temp = img_lab
+temp[0][0][0] = average_l
+temp[0][0][1] = average_a
+temp[0][0][2] = average_b
+resRGB = cv2.cvtColor(temp, cv2.COLOR_LAB2BGR)[0][0]
+x = int(resRGB[0])
+y = int(resRGB[1])
+z = int(resRGB[2])
+equ3 = cv2.merge((l, a, b))
+result3 = np.hstack((img_lab, equ3))
+result4 = cv2.cvtColor(result3, cv2.COLOR_LAB2BGR)
+cv2.putText(result4, 'This is a test text %s' %str(12345), (l.shape[0] // 2, l.shape[1] // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (x,y,z), 2)
+cv2.imwrite('lab_equ.png', result4)
