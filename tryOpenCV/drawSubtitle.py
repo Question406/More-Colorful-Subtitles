@@ -2,17 +2,6 @@ from cv2 import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 
-# imgH, imgW, _ = img_bgr.shape
-# print(imgW, " ", imgH)
-
-# text = 'This is a test text %s' %str(12345)
-# res, baseLine = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 2, 2)
-# width, height = res[0], res[1]
-# print(width, height)
-
-# cv.putText(img_bgr, text, (imgW // 2 - width // 2, imgH - height), cv.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2)
-# cv.imwrite('test_textImg.png', img_bgr)
-
 def addSubTitle(img, text, fontColor, fontScale=1.5, fontThickness=1):
     """
     :param img: RGB img matrix
@@ -27,7 +16,7 @@ def addSubTitle(img, text, fontColor, fontScale=1.5, fontThickness=1):
     cv.putText(img, text, (imgW // 2 - width // 2, imgH -  5 * height), cv.FONT_HERSHEY_SIMPLEX, fontScale, fontColor, fontThickness)
 
 
-pic_file = '../videoSrc/bar_code.jpeg'
+pic_file = '../videoSrc/test.png'
 img_bgr = cv.imread(pic_file, cv.IMREAD_COLOR)
 text = "this is a test text"
 
@@ -51,18 +40,11 @@ average_a = np.mean(a)
 average_b = np.mean(b)
 
 print("original LAB: ", average_l, " ", average_a - 128, " ", average_b - 128)
-# average_l = 256 - average_l
-# average_l = 
-# average_a = 256 - average_a
-# average_b = 256 - average_b
-# average_l = 100 - np.mean(l)
 average_a = 121 + 128
 average_b = 123 + 128
 print("subtitle LAB: ", average_l, " ", average_a - 128, " ", average_b - 128)
-temp = boundingLAB
-temp[0][0][0] = average_l
-temp[0][0][1] = average_a
-temp[0][0][2] = average_b
+
+temp = np.array([average_l, average_a, average_b], dtype=boundingLAB[0][0].dtype).reshape(1, 1, 3)
 
 res = (average_l, average_a, average_b)
 resRGB = cv.cvtColor(temp, cv.COLOR_LAB2BGR)[0][0]
