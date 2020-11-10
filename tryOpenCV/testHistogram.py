@@ -28,7 +28,7 @@ def calcAndDrawHist(image, color):
       
     for h in range(256):  
         intensity = int(hist[h]* hpt/ maxVal)  
-        cv2.line(histImg,(h,256), d(h,256-intensity), color)  
+        cv2.line(histImg,(h,256), (h,256-intensity), color)  
     return histImg
 
 

@@ -4,12 +4,10 @@
 from cv2 import cv2
 from drawSubtitle import addSubTitle
 import numpy as np
-# from moviepy.editor import AudioFileClip
-# from ffpyplayer.player import MediaPlayer
 
 # sys.path.append("./videoSrc/")
 video = "../videoSrc/TWICE-What_Is_Love.mp4"
-result_video = "demo-result.mp4"
+result_video = "TWICE-What_Is_Love-Subtitle.mp4"
 #读取视频
 cap = cv2.VideoCapture(video)
 print("read done")
@@ -53,9 +51,10 @@ while (cap.isOpened()):
         boundingBox = frame[LLCorner[1]- 5 * height : LLCorner[1], LLCorner[0] : LLCorner[0] + width, :]
         boundingLAB = cv2.cvtColor(boundingBox, cv2.COLOR_BGR2LAB)
         (l, a, b) = cv2.split(boundingLAB)
+        # frame_LAB = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        # (l, a, b) = cv2.split(frame_LAB)
         # print(np.max(l))
         # print(np.min(l))
-
         # get RGB color of subtitle
         average_l = (256 - np.mean(l))
         average_a = np.mean(a)

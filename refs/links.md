@@ -5,3 +5,4 @@ OpenCV—python 颜色空间（RGB，HSV，Lab）与 颜色直方图: https://bl
 [OpenCV3]文字绘制——cv::putText详解: https://blog.csdn.net/guduruyu/article/details/68491211
 
 custom fonts: https://www.codesofinterest.com/2017/07/more-fonts-on-opencv.html#:~:text=Well%2C%20OpenCV%20itself%20cannot%20load,to%20draw%20text%20on%20images.
+
