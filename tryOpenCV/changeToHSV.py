@@ -55,32 +55,31 @@ while (cap.isOpened()):
         LLCorner = (imgW // 2 - width // 2, imgH - k * height)
         # get boundingbox
         boundingBox = frame[LLCorner[1]- k * height : LLCorner[1], LLCorner[0] : LLCorner[0] + width, :]
-        boundingLAB = cv2.cvtColor(boundingBox, cv2.COLOR_BGR2LAB)
-        (l, a, b) = cv2.split(boundingLAB)
+        boundingHSV = cv2.cvtColor(boundingBox, cv2.COLOR_BGR2HSV)
+        (h, s, v) = cv2.split(boundingHSV)
 
-        average_l = np.mean(sorted(l.reshape(-1), reverse=True)[:5])
-        # average_l = 50
-        average_a = np.mean(a)
-        average_b = np.mean(b)
-        average_a = 256 - average_a
-        average_b = 256 - average_b
-        temp = boundingLAB
-        temp[0][0][0] = average_l
-        temp[0][0][1] = average_a
-        temp[0][0][2] = average_b
+        # get RGB color of subtitle
+        # average_h = int(180. - np.mean(h))
+        average_h = (int(np.mean(h)) + 90) % 180
+        average_s = int(np.mean(s))
+        average_v = int(255 - np.mean(v))
+        
+        temp = boundingHSV
+        temp[0][0][0] = average_h
+        temp[0][0][1] = average_s
+        temp[0][0][2] = average_v
 
-        res = (average_l, average_a, average_b)
-        resRGB = cv2.cvtColor(temp, cv2.COLOR_LAB2BGR)[0][0]
+        res = (average_h, average_s, average_v)
+        resRGB = cv2.cvtColor(temp, cv2.COLOR_HSV2BGR)[0][0]
         resRGB = [int(x) for x in resRGB]
         # temp = [str(resRGB[2]), str(resRGB[1]), str(resRGB[0])]
-        temp = [ str(int(average_l)), str(int(average_a)), str(int(average_b))]
+        temp = [str(int(np.mean(h))), str(int(np.mean(s))), str(int(np.mean(v))) , " : ", str(int(average_h)), str(int(average_s)), str(int(average_v))]
         output.append(" ".join(temp))
 
-        # cv.putText(frame, 'frame_%s' %frame_id, (word_x, word_y), cv2.FONT_HERSHEY_SIMPLEX, 1, (55,255,155), 2)
         addSubTitle(frame, text, resRGB, fontScale, fontThickness)
         videoWriter.write(frame)
     else:
         videoWriter.release()
         break
-with open("%s-lab.txt"%srcName, "w") as f:
+with open("%s-hsv.txt"%srcName, "w") as f:
     f.write("\n".join(output))

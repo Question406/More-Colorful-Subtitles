@@ -6,25 +6,28 @@ import json
 
 def addSubTitle(img, text, fontColor, fontScale=1.5, fontThickness=1):
     """
-    :param img: RGB img matrix
+    :param img: BGR img matrix
     :param text: the text to add
-    :param fontColor: fontCOlor
+    :param fontColor: fontColor in BGR color space
     :return: img matrix after adding subtitle
     """
 
     imgH, imgW, _ = img.shape
     res, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, fontScale, fontThickness)
     width, height = res
-    cv.putText(img, text, (imgW // 2 - width // 2, imgH -  1 * height), cv.FONT_HERSHEY_SIMPLEX, fontScale, fontColor, fontThickness)
+    cv.putText(img, text, (imgW // 2 - width // 2, imgH -  5 * height), cv.FONT_HERSHEY_SIMPLEX, fontScale, fontColor, fontThickness)
 
-def getColor(boundingLAB):
-    colorClusters = getClusters(boundingLAB, k=3)
-    color, percentage = zip(*colorClusters)
+# def getColor(boundingLAB):
+#     """
+#     :param boundingLAB: the bounding box of LAB color space
+#     """
+#     colorClusters = getClusters(boundingLAB, k=3)
+#     color, percentage = zip(*colorClusters)
     
-    if percentage[0] > 0.7:
-        resColor = np.mean(color,axis=1)
-        print(resColor)
-    elif (percentage[0] - percentage[1] < 0.1 and np.linalg.norm(np.mean(color, axis=1), axis=1, keepdims=True) < ) :
+#     if percentage[0] > 0.7:
+#         resColor = np.mean(color,axis=1)
+#         print(resColor)
+#     elif (percentage[0] - percentage[1] < 0.1 and np.linalg.norm(np.mean(color, axis=1), axis=1, keepdims=True) < ) :
         
 
 # pic_file = '../videoSrc/test.png'
