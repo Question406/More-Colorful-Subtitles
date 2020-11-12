@@ -42,19 +42,19 @@ def plot_colors(hist, centroids):
 	# return the bar chart
     return bar
 
-def _getClusters(image, k = 5):
+def _getClusters(image, k = 3):
     """
     :param image: source color matrix (reshaped to 2d)
     :param k: the cluster number
-    :return: cluster color and percentage
+    :return: cluster color(in the original color space) and percentage
     """
-    clt = KMeans(n_clusters=5)
+    clt = KMeans(n_clusters=k)
     clt.fit(image)
     hist = centroid_histogram(clt)
     # bar = plot_colors(hist, clt.cluster_centers_)
     return sorted(zip(hist, clt.cluster_centers_), reverse=True)
 
-def getClusters(image, k = 5):
+def getClusters(image, k = 3):
     """
     :param image: source image matrix
     :param k: the cluster number
@@ -74,7 +74,7 @@ def showImage(src, name=""):
     plt.axis("off")
     plt.imshow(tSrc)
 
-def visualizeColorClusters(image, k = 5):
+def visualizeColorClusters(image, k = 3):
     """
     :param image: source color matrix
     :param k: the cluster number
@@ -88,30 +88,30 @@ def visualizeColorClusters(image, k = 5):
     plt.show()
 
 
-# load the image and convert it from BGR to RGB so that
-# we can dispaly it with matplotlib
-image_path = '../videoSrc/test.png'
-image = cv2.imread(image_path)
-# BGR-->RGB cv to matplotlib show
-image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+# # load the image and convert it from BGR to RGB so that
+# # we can dispaly it with matplotlib
+# image_path = '../videoSrc/test.png'
+# image = cv2.imread(image_path)
+# # BGR-->RGB cv to matplotlib show
+# image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-# show our image
-plt.figure()
-plt.axis("off")
-plt.imshow(image)
+# # show our image
+# plt.figure()
+# plt.axis("off")
+# plt.imshow(image)
 
-# reshape the image to be a list of pixels
-image = image.reshape((image.shape[0] * image.shape[1], 3))
+# # reshape the image to be a list of pixels
+# image = image.reshape((image.shape[0] * image.shape[1], 3))
 
-# cluster the pixel intensities
-clt = KMeans(n_clusters=5)
-clt.fit(image)
-# build a histogram of clusters and then create a figure
-# representing the number of pixels labeled to each color
-hist = centroid_histogram(clt)
-bar = plot_colors(hist, clt.cluster_centers_)
-# show our color bart
-plt.figure()
-plt.axis("off")
-plt.imshow(bar)
-plt.show()
+# # cluster the pixel intensities
+# clt = KMeans(n_clusters=5)
+# clt.fit(image)
+# # build a histogram of clusters and then create a figure
+# # representing the number of pixels labeled to each color
+# hist = centroid_histogram(clt)
+# bar = plot_colors(hist, clt.cluster_centers_)
+# # show our color bart
+# plt.figure()
+# plt.axis("off")
+# plt.imshow(bar)
+# plt.show()

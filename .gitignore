@@ -140,5 +140,8 @@ cython_debug/
 # vscode
 .vscode/
 
-videoOutput/
 
+# video
+videoOutput/
+*.mp4
+*.flv

@@ -6,8 +6,12 @@ from drawSubtitle import addSubTitle
 import numpy as np
 
 # sys.path.append("./videoSrc/")
-video = "../videoSrc/TWICE-What_Is_Love.mp4"
-result_video = "TWICE-What_Is_Love-Subtitle.mp4"
+# video = "../videoSrc/TWICE-What_Is_Love.mp4"
+# srcName = "BLACKPINK-Kill_This_Love"
+# srcName = "TWICE-What_Is_Love"
+srcName = "WesternSichuan"
+video = "../videoOutput/%s.flv"%srcName
+result_video = "%s-Subtitle.mp4"%srcName
 #读取视频
 cap = cv2.VideoCapture(video)
 print("read done")
@@ -29,6 +33,8 @@ frame_id = 0
 print("transfer")
 output = []
 
+k = 1
+
 while (cap.isOpened()):
     ret, frame = cap.read()
     if ret == True:
@@ -46,9 +52,9 @@ while (cap.isOpened()):
         res, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, fontScale, fontThickness)
         width, height = res
 
-        LLCorner = (imgW // 2 - width // 2, imgH - 5 * height)
+        LLCorner = (imgW // 2 - width // 2, imgH - k * height)
         # get boundingbox
-        boundingBox = frame[LLCorner[1]- 5 * height : LLCorner[1], LLCorner[0] : LLCorner[0] + width, :]
+        boundingBox = frame[LLCorner[1]- k * height : LLCorner[1], LLCorner[0] : LLCorner[0] + width, :]
         boundingLAB = cv2.cvtColor(boundingBox, cv2.COLOR_BGR2LAB)
         (l, a, b) = cv2.split(boundingLAB)
         # frame_LAB = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
@@ -57,6 +63,7 @@ while (cap.isOpened()):
         # print(np.min(l))
         # get RGB color of subtitle
         average_l = (256 - np.mean(l))
+        # average_l = 50
         average_a = np.mean(a)
         average_b = np.mean(b)
         average_a = 256 - average_a
@@ -79,5 +86,5 @@ while (cap.isOpened()):
     else:
         videoWriter.release()
         break
-with open("rgb.txt", "w") as f:
+with open("%s-lab.txt"%srcName, "w") as f:
     f.write("\n".join(output))
