@@ -4,7 +4,7 @@ channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
   - defaults
 dependencies:
-  - _libgcc_mutex=0.1=main
+  - _libgcc_mutex=0.1=main.py
   - argon2-cffi=20.1.0=py37h7b6447c_1
   - astroid=2.4.2=py37_0
   - async_generator=1.10=py37h28b3542_0
