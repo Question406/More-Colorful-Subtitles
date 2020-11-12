@@ -3,7 +3,6 @@ from subprocess import Popen
 import os
 
 def splitAudio(videoName, videoPath):
-    # "ffmpeg -i BLACKPINK-Kill_This_Love.mp4 -vn -codec copy out.m4a"
     if not os.path.exists(videoName.strip(".mp4") + ".m4a"):
         with open("audioLog.txt", "w") as log:
             cmd = "ffmpeg -i %s -vn -codec copy %s.m4a"%(videoName, videoName.strip(".mp4"))
@@ -12,7 +11,7 @@ def splitAudio(videoName, videoPath):
     print("Audio Split Done! %s"%videoName)
 
 def mergeVideoAndAudio(videoName, videoPath):
-    outputName = videoName.strip(".mp4") + "_output.mp4"
+    outputName = videoName.strip(".mp4") + "-Subtitle.mp4"
     if os.path.exists(outputName):
         os.remove(outputName)
     with open("mergeLog.txt", "w") as log:
