@@ -21,13 +21,15 @@ from utils import (drawImageSingleText, CV2ToPIL, PILToCV2, getTextInfoPIL, func
 # outputF.close()
 
 def _main(*args):
+    # video src
     srcName = args[0]
-    videoSrc = "./videoSrc/%s.mp4" % srcName
-    outputDir = "./videoOutput/%s" % srcName
+    src = srcName.strip(".mp4").strip(".flv")
+    videoSrc = "./videoSrc/%s" % srcName
+    outputDir = "./videoOutput/%s" % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
 
-    result_video = "%s/%s-Subtitle.mp4" % (outputDir, srcName)
+    result_video = "%s/%s-Subtitle.mp4" % (outputDir, src)
     cap = cv.VideoCapture(videoSrc)
     print("read done")
     # video FPS
@@ -67,4 +69,4 @@ def _main(*args):
     return 0
 
 
-funcTime(_main, 'demo_Trim')
+funcTime(_main, 'demo_Trim.mp4')
