@@ -15,7 +15,7 @@ def getFont(font='Consolas', fontSize=32):
     return ImageFont.truetype(fontPath, fontSize)
 
 
-def drawImageSingleText(image, text, font='Consolas', anchor=(0, 0), color=(0, 255, 0), fontSize=32):
+def drawImageSingleText(image, text, font=getFont('Consolas', 32), anchor=(0, 0), color=(0, 255, 0), fontSize=32):
     """
     :param image: a ImageDraw object to draw text
     :param anchor: left upper point of the text as PIL wanted
@@ -64,7 +64,7 @@ def CV2ToPIL(image):
     :param image: numpy array (cv2 accept)
     :return: PIL image object
     """
-    return Image.fromarray(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+    return Image.fromarray(cv.cvtColor(image, cv.COLOR_BGR2LAB))
 
 
 def PILToCV2(image):
@@ -72,7 +72,7 @@ def PILToCV2(image):
     :param image: PIL image object
     :return: numpy array (cv2 accpet)
     """
-    return cv.cvtColor(np.asarray(image), cv.COLOR_RGB2BGR)
+    return cv.cvtColor(np.asarray(image), cv.COLOR_LAB2BGR)
 
 
 def funcTime(func, *args, **kwargs):
