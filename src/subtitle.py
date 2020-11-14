@@ -1,6 +1,4 @@
 import pysrt
-from utils import (getFont)
-import pysrt
 
 from utils import (getFont)
 
@@ -33,7 +31,7 @@ def drawSubtitle(image, text, anchor, font=getFont('Consolas', 32), color=(255, 
     return image
 
 
-def processSRT(srtPath, videoFPS, frameCnt):
+def processSRT(srtPath, videoFPS):
     """
     :param srtName: file name of the srt file
     :param videoFPS: the videoFPS
@@ -42,7 +40,4 @@ def processSRT(srtPath, videoFPS, frameCnt):
 
     subs = pysrt.open(srtPath)
     res = [subtitle(sub, videoFPS) for sub in subs]
-    temp = subtitle(None, videoFPS)
-    temp.start = temp.end = frameCnt
-    res.append(temp)
     return res

@@ -10,6 +10,129 @@ from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
 
+def workOnSingleSub(cap, nowSub, font, colors, k):
+    # set to the first frame
+    cap.set(1, 0)
+    _, frame = cap.read()
+    text = nowSub.text
+    im = CV2ToPIL(frame)
+    draw = ImageDraw.Draw(im)
+    textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+
+    nowStatus = [np.zeros(shape=(len(colors), 3))]
+
+    # set to the start frame
+    cap.set(1, nowSub.start)
+    for i in range(nowSub.end - nowSub.start):
+        ret, frame = cap.read()
+        im = CV2ToPIL(frame)
+        draw = ImageDraw.Draw(im)
+        resStatus = calculateLoss(draw, frame, im, nowStatus[-1], colors, text,
+                                  anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font=font)
+        nowStatus.append(resStatus)
+    return nowStatus
+
+
+def getPickedColors(resStatus, colors):
+    pickedColor = []
+    printList = []
+    lastColor = np.argmax(resStatus[-1][:, 0])
+    for i in range(len(resStatus)):
+        nowColor = lastColor
+        # pickedColor.append(LABColors[nowColor])
+        pickedColor.append(colors[nowColor])
+        lastColor = int(resStatus[len(resStatus) - i - 1][nowColor][1])
+        printList.append(
+            str(resStatus[len(resStatus) - i - 1][nowColor][0] - resStatus[len(resStatus) - i - 2][lastColor][
+                0]) + " : " +
+            str(colors[nowColor]) + " : " + str(pickedColor[-1]) + " : " +
+            str(resStatus[len(resStatus) - i - 1][nowColor][2]))
+    with open("loss.txt", 'w') as f:
+        f.write("\n".join(printList))
+    return pickedColor[::-1]
+
+
+def newWork(*args):
+    srcName = args[0]
+    src = srcName[:-4]
+    videoSrc = './videoSrc/%s' % srcName
+    srtSrc = './subtitle/srt/%s.srt' % src
+
+    # process srt and load video
+    cap = cv.VideoCapture(videoSrc)
+    fps = cap.get(cv.CAP_PROP_FPS)
+    subs = processSRT(srtSrc, fps)
+
+    # process colors and font
+    font = getFont('Consolas', 22)
+
+    numColors = 256
+    colors = getColorBar('inferno', numColors)
+    showColorBar("inferno", numColors)
+    print(colors.shape)
+
+    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape((-1, 3))
+
+    # get color
+    k = 1
+    status = {}
+    for sub in subs:
+        status[sub] = workOnSingleSub(cap, sub, font, LABColors, k)
+
+    # output
+    outputDir = './videoOutput/%s' % src
+    if not os.path.exists(outputDir):
+        os.mkdir(outputDir)
+    resultPath = '%s/%s-Subtitle-work.mp4' % (outputDir, src)
+    fourcc = cv.VideoWriter_fourcc(*"mp4v")
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    videoWriter = cv.VideoWriter(resultPath, fourcc, fps, (frame_width, frame_height))
+
+    # add subtitle and output
+    cap.set(1, 1)
+    _, frame = cap.read()
+    itr = iter(subs)
+    nowSub = next(itr)
+    resColor = iter(getPickedColors(status[nowSub], colors))
+    text = nowSub.text()
+
+    im = Image.fromarray(frame, cv.COLOR_BGR2RGB)
+    draw = ImageDraw.Draw(im)
+    textWidth, textHeight = getTextInfoPIL(draw, text, font)
+
+    cap.set(1, 1)
+
+    frame_id = 0
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if ret:
+            frame_id += 1
+            if frame_id % 100 == 0:
+                print("hello ", frame_id // 100)
+            if frame_id >= nowSub.start and frame_id <= nowSub.end:
+                # RGB
+                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                draw = ImageDraw.Draw(im)
+                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                             next(resColor))
+                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
+            elif frame_id > nowSub.end:
+                nowSub = next(itr)
+                resColor = iter(getPickedColors(status[nowSub], colors))
+                text = nowSub.text
+                textWidth, textHeight = getTextInfoPIL(draw, text, font)
+            videoWriter.write(frame)
+        else:
+            videoWriter.release()
+            break
+    cap.release()
+
+    return 0
+
+
 def work(*args):
     # video src
     srcName = args[0]
@@ -20,7 +143,7 @@ def work(*args):
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
 
-    result_video = "%s/%s-Subtitle.mp4" % (outputDir, src)
+    result_video = "%s/%s-Subtitle-work.mp4" % (outputDir, src)
     cap = cv.VideoCapture(videoSrc)
     print("read done")
     # video FPS
@@ -47,8 +170,6 @@ def work(*args):
     colors = getColorBar('inferno', numColors)
     showColorBar("inferno", numColors)
     print(colors.shape)
-    # status = [np.zeros((numColors, 3))]
-    # print(status[0].shape)
     start = time.time()
 
     LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape((-1, 3))
@@ -66,10 +187,12 @@ def work(*args):
                 print("hello", frame_id // 100)
             if frame_id >= nowSub.start and frame_id <= nowSub.end:
                 if not nowSub in status:
+                    assert nowStatus is None
                     print("1 ", frame_id)
                     print(nowSub)
                     nowStatus = [np.zeros(shape=(numColors, 3))]
                     status[nowSub] = nowStatus
+
                 text = nowSub.text
                 # text coordinate
                 imgH, imgW = frame_height, frame_width
@@ -83,6 +206,7 @@ def work(*args):
             elif frame_id > nowSub.end:
                 print("2 ", frame_id)
                 nowSub = next(itr)
+                nowStatus = None
                 print(nowSub)
         else:
             break
@@ -94,6 +218,9 @@ def work(*args):
     videoWriter = cv.VideoWriter(result_video, fourcc, fps_video, (frame_width, frame_height))
     cap = cv.VideoCapture(videoSrc)
     frame_id = 0
+    subCnt = 0
+    flag = True
+    outputF = open("colors.text", 'w')
     while (cap.isOpened()):
         ret, frame = cap.read()
         if ret == True:
@@ -102,14 +229,26 @@ def work(*args):
                 print("hello", frame_id // 100)
             if frame_id >= nowSub.start and frame_id <= nowSub.end:
                 if resColor is None:
+                    subCnt += 1
+                    print("here ", subCnt)
+                    print(nowSub)
+
                     resStatus = status[nowSub]
                     pickedColor = []
                     lastColor = np.argmax(resStatus[-1][:, 0])
+                    outputList = [(str(nowSub)) + "\n\n\n"]
+
                     for i in range(len(resStatus)):
                         nowColor = lastColor
                         pickedColor.append(colors[nowColor])
                         lastColor = int(resStatus[len(resStatus) - i - 1][nowColor][1])
+                        outputList.append(str(nowColor) + " : " + str(colors[nowColor]) + " : " + str(
+                            resStatus[len(resStatus) - i - 1][nowColor][0]))
+
                     resColor = iter(pickedColor[::-1])
+                    # with open("pickedColors.txt", 'w') as f:
+                    outputF.write("\n".join(outputList))
+                    outputF.write("\n\n")
 
                 # text coordinate
                 text = nowSub.text
@@ -129,6 +268,7 @@ def work(*args):
             break
 
     print("write video need: ", time.time() - start)
+    outputF.close()
 
     return 0
 
@@ -157,9 +297,9 @@ def _main(*args):
     print("transfering %s" % srcName)
     print(frame_width, " ", frame_height)
     # position of the subtitle
-    k = 5
+    k = 1
 
-    font = getFont('Consolas', 32)
+    font = getFont('Consolas', 22)
 
     numColors = 256
     colors = getColorBar('inferno', numColors)
@@ -188,7 +328,7 @@ def _main(*args):
             imgH, imgW = frame_height, frame_width
             im = CV2ToPIL(frame)
             draw = ImageDraw.Draw(im)
-            textWidth, textHeight = getTextInfoPIL(draw, text)
+            textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
             # drawImageSingleText(draw, text, font='Consolas', anchor=(imgW // 2 - textWidth // 2, imgH - k * textHeight))
             resStatus = calculateLoss(draw, frame, im, status[-1], LABColors, text,
                                       anchor=(imgW // 2 - textWidth // 2, imgH - k * textHeight), font=font)
@@ -210,7 +350,7 @@ def _main(*args):
         pickedColor.append(colors[nowColor])
         lastColor = int(status[len(status) - i - 1][nowColor][1])
         lossList.append(
-            str(status[len(status) - i - 1][nowColor][0]) + " : " +
+            # str(status[len(status) - i - 1][nowColor][0]) + " : " +
             str(status[len(status) - i - 1][nowColor][0] - status[len(status) - i - 2][lastColor][0]) + " : " +
             str(colors[nowColor]) + " : " + str(pickedColor[-1]) + " : " +
             str(status[len(status) - i - 1][nowColor][2]))
@@ -219,10 +359,6 @@ def _main(*args):
     with open("loss.txt", 'w') as f:
         f.write("\n".join(lossList[::-1]))
     resColor = pickedColor[::-1]
-    # print(resColor.shape)
-    # print(resColor)
-    # print(len(resColor))
-
     # return
     videoWriter = cv.VideoWriter(result_video, fourcc, fps_video, (frame_width, frame_height))
     cap = cv.VideoCapture(videoSrc)
@@ -239,7 +375,7 @@ def _main(*args):
             # RGB
             im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(im)
-            textWidth, textHeight = getTextInfoPIL(draw, text)
+            textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
             drawSubtitle(draw, text, (imgW // 2 - textWidth // 2, imgH - k * textHeight), font, resColor[frame_id - 1])
             frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
             videoWriter.write(frame)
@@ -256,7 +392,7 @@ def _main(*args):
 funcTime(work, 'BLACKPINK-Kill_This_Love.mp4')
 # funcTime(_main, 'demo_Trim.mp4')
 # funcTime(_main, 'TWICE-What_Is_Love.mp4')
-# funcTime(_main, 'BLACKPINK-Kill_This_Love.mp4')
+funcTime(_main, 'BLACKPINK-Kill_This_Love.mp4')
 # funcTime(_main, 'WesternSichuan.flv')
 
 # outputF = open("./temp.png", 'wb')
