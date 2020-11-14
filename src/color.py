@@ -27,6 +27,9 @@ def _d_textRegion2textColor(bbox, textColor):
     """
     assert len(bbox.shape) == 3
     colorBBox = bbox.reshape((-1, 3))
+    # print(textColor)
+    # print(np.mean(np.sqrt(np.sum((colorBBox - textColor) ** 2, axis=-1))))
+    # print("---")
     return np.mean(np.sqrt(np.sum((colorBBox - textColor) ** 2, axis=-1)))
 
 
@@ -38,7 +41,7 @@ def d_textRegion2textColor(bboxs, textColor):
              min(d(bbox, textColor))
     """
     d = [_d_textRegion2textColor(bbox, textColor) for bbox in bboxs]
-    return np.min(d)
+    return np.min(d), np.argmin(d)
 
 
 def showColorBar(bar_kind, num):
@@ -75,7 +78,7 @@ def transColorLoss(c1, c2):
 
 
 def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFont('Consolas', 32)):
-    epsilon = 128
+    epsilon = 10
     # bounding box of entire text
     #    bbox = image.textbbox(anchor, text, font)
     # left upper bound of bounding box
@@ -85,9 +88,6 @@ def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFo
     # for each character, find its bounding box
     for ch in text:
         box = image.textbbox((lastl, u), ch, font=font)
-
-        image.rectangle(box, fill=None, outline=(255, 0, 0))
-
         chboxs.append(box)
         lastl = box[2]
     boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
@@ -102,20 +102,18 @@ def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFo
     # cv.imwrite('temp.png', frame)
 
     # [(loss, from which color)...]
-    resStatus = np.zeros((len(colors), 2))
+    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
 
     for (i, status) in enumerate(resStatus):
-        curColorLoss = d_textRegion2textColor(boxs, colors[i])
+        curColorLoss, charPos = d_textRegion2textColor(boxs, colors[i])
+        charPos = text[charPos]
         # colorLoss = 1e30
-        status[1] = max(i - epsilon, 0) + np.argmin(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0])
-        # for j in range(max(i - epsilon, 0), min(len(colors), i + epsilon)):
-        # if (lastStatus[j][0] + transColorLoss(colors[j], colors[i]) < colorLoss):
-        #     colorLoss = lastStatus[j][0] + transColorLoss(colors[j], colors[i])
-        #     # from which color
-        #     status[1] = j
-        # if (lastStatus[j][])
+        status[1] = max(i - epsilon, 0) + np.argmax(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0])
+        # status[1]  = np.argmin()
         colorLoss = lastStatus[int(status[1])][0]
         colorLoss += curColorLoss
         # color loss
         status[0] = colorLoss
+        status[2] = charPos
+
     return resStatus

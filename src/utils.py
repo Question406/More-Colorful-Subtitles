@@ -24,8 +24,6 @@ def drawImageSingleText(image, text, font=getFont('Consolas', 32), anchor=(0, 0)
     :param color: color of text
     :return: a Image object from PIL
     """
-    # get font
-    font = getFont(font, fontSize)
     # draw text
     image.text(anchor, text, font=font, fill=color)
     # bounding box of entire text
@@ -38,13 +36,19 @@ def drawImageSingleText(image, text, font=getFont('Consolas', 32), anchor=(0, 0)
     lastl, u = anchor[0], anchor[1]
     image.rectangle((lastl, u, lastl, u), fill=None, outline=(255, 0, 0))
 
+    boxes = []
     # draw singleText box
     for ch in text:
         box = image.textbbox((lastl, u), ch, font=font)
-        image.rectangle(box, fill=None, outline=(255, 0, 0))
+
+        boxes.append(box)
+        # image[box[1]:box[3], box[0]:box[2]] = (255, 0, 0)
+        #        image.rectangle(box, fill=None, outline=(255, 0, 0))
         lastl = box[2]
 
-    return image
+    #   print(d_textRegion2textColor(boxes, color))
+    #    return image
+    return boxes
 
 
 def getTextInfoPIL(image, text, font='Consolas', fontSize=32):
