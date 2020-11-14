@@ -27,10 +27,14 @@ def _d_textRegion2textColor(bbox, textColor):
     """
     assert len(bbox.shape) == 3
     colorBBox = bbox.reshape((-1, 3))
+
     # print(textColor)
     # print(np.mean(np.sqrt(np.sum((colorBBox - textColor) ** 2, axis=-1))))
     # print("---")
-    return np.mean(np.sqrt(np.sum((colorBBox - textColor) ** 2, axis=-1)))
+    # print(colorBBox.shape)
+    # print(np.mean(colorBBox, axis=1).shape)
+    return np.sqrt(np.sum((np.mean(colorBBox, axis=0) - textColor) ** 2, axis=-1))
+    # return np.mean(np.sqrt(np.sum((colorBBox - textColor) ** 2, axis=-1)))
 
 
 def d_textRegion2textColor(bboxs, textColor):
@@ -77,7 +81,41 @@ def transColorLoss(c1, c2):
     return np.sqrt(np.sum((c1 - c2) ** 2, -1))
 
 
-def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFont('Consolas', 32)):
+def getChBoxs(image, text, anchor, font):
+    lastl, u = anchor[0], anchor[1]
+    chboxs = []
+    s = ''
+    # for each character, find its bounding box
+    for ch in text:
+        s = s + ch
+        if ch == ' ':
+            continue
+        else:
+            box = image.textbbox((lastl, u), s, font=font)
+            chboxs.append(box)
+            lastl = box[2]
+            s = ''
+    return chboxs
+
+
+def calculateLoss2(frame, lastStatus, colors, text, chboxs):
+    epsilon = 10
+    boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
+    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
+    for (i, status) in enumerate(resStatus):
+        curColorLoss, charPos = d_textRegion2textColor(boxs, colors[i])
+        charPos = text[charPos]
+        status[1] = max(i - epsilon, 0) + np.argmax(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0])
+        colorLoss = lastStatus[int(status[1])][0]
+        colorLoss += curColorLoss
+        # color loss
+        status[0] = colorLoss
+        status[2] = charPos
+
+    return resStatus
+
+
+def calculateLoss(image, frame, lastStatus, colors, text, anchor, font=getFont('Consolas', 32)):
     epsilon = 10
     # bounding box of entire text
     #    bbox = image.textbbox(anchor, text, font)

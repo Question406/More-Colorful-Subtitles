@@ -39,5 +39,6 @@ def processSRT(srtPath, videoFPS):
     """
 
     subs = pysrt.open(srtPath)
+    print(subs[0])
     res = [subtitle(sub, videoFPS) for sub in subs]
     return res
