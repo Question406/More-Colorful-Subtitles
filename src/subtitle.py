@@ -1,8 +1,29 @@
-import re
-import time
+import pysrt
+from utils import (getFont)
+import pysrt
 
 from utils import (getFont)
 
+
+class subtitle:
+    def init(self, start, end, text):
+        self.start = start
+        self.end = end
+        self.text = text
+        return self
+
+    def __init__(self, sub, videoFPS):
+        if not sub is None:
+            self.start = int(sub.start.ordinal / 1000 * videoFPS)
+            self.end = int(sub.end.ordinal / 1000 * videoFPS)
+            self.text = sub.text
+        else:
+            self.start = -1
+            self.end = -1
+            self.text = 'Error'
+
+    def __str__(self):
+        return "[{} : {} : {}]".format(self.start, self.end, self.text)
 
 def drawSubtitle(image, text, anchor, font=getFont('Consolas', 32), color=(255, 0, 0)):
     # color = (int(color[0]) for c in color]
@@ -12,25 +33,16 @@ def drawSubtitle(image, text, anchor, font=getFont('Consolas', 32), color=(255, 
     return image
 
 
-def processSRT(srtName, videoFPS):
-    TIME_PATTERN = '%02d:%02d:%02d,%03d'
-    TIME_REPR = 'SubRipTime(%d, %d, %d, %d)'
-    RE_TIME_SEP = re.compile(r'\:|\.|\,')
-    RE_INTEGER = re.compile(r'^(\d+)')
-    SECONDS_RATIO = 1000
-    MINUTES_RATIO = SECONDS_RATIO * 60
-    HOURS_RATIO = MINUTES_RATIO * 60
+def processSRT(srtPath, videoFPS, frameCnt):
+    """
+    :param srtName: file name of the srt file
+    :param videoFPS: the videoFPS
+    :return: a list of all subs, containing start frame_id and end frame id and its context
+    """
 
-    srtPath = './subtitles/srt/%s.srt' % srtName
-
-    tempVal = ((0, 0), "None")
-    resList = []
-    with open(srtPath, 'r') as f:
-        for ind, val in enumerate(f.readlines()):
-            if ind % 4 == 1:
-                time.strftime("%H:%m:S")
-            elif ind % 4 == 2:
-
-                return
-
-    return
+    subs = pysrt.open(srtPath)
+    res = [subtitle(sub, videoFPS) for sub in subs]
+    temp = subtitle(None, videoFPS)
+    temp.start = temp.end = frameCnt
+    res.append(temp)
+    return res

@@ -85,11 +85,17 @@ def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFo
     lastl, u = anchor[0], anchor[1]
 
     chboxs = []
+    s = ''
     # for each character, find its bounding box
     for ch in text:
-        box = image.textbbox((lastl, u), ch, font=font)
-        chboxs.append(box)
-        lastl = box[2]
+        s = s + ch
+        if ch == ' ':
+            continue
+        else:
+            box = image.textbbox((lastl, u), s, font=font)
+            chboxs.append(box)
+            lastl = box[2]
+            s = ''
     boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
     # print(boxs[0])
 

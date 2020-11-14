@@ -51,15 +51,14 @@ def drawImageSingleText(image, text, font=getFont('Consolas', 32), anchor=(0, 0)
     return boxes
 
 
-def getTextInfoPIL(image, text, font='Consolas', fontSize=32):
+def getTextInfoPIL(image, text, font=getFont('Consolas', fontSize=32)):
     """
     :param image: PIl image object
     :param text: text we want to draw
-    :param font: font name
+    :param font: font object
     :param fontSize: font size
     :return:
     """
-    font = getFont(font, fontSize)
     return image.textsize(text, font)
 
 
