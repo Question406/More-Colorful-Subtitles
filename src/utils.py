@@ -76,6 +76,6 @@ def PILToCV2(image):
 
 
 def funcTime(func, *args, **kwargs):
-    start = time.clock()
+    start = time.time()
     func(*args)
-    print("elapsed: ", time.clock() - start)
+    print("elapsed: ", time.time() - start)

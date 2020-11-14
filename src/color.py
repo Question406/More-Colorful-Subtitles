@@ -75,7 +75,7 @@ def transColorLoss(c1, c2):
 
 
 def calculateLoss(image, frame, im, lastStatus, colors, text, anchor, font=getFont('Consolas', 32)):
-    epsilon = 5
+    epsilon = 128
     # bounding box of entire text
     #    bbox = image.textbbox(anchor, text, font)
     # left upper bound of bounding box

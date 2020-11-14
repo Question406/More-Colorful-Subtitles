@@ -1,4 +1,5 @@
 import os
+import time
 
 import numpy as np
 from PIL import ImageDraw
@@ -38,8 +39,8 @@ def _main(*args):
     font = getFont('Consolas', 32)
 
     numColors = 256
-    colors = getColorBar('Blues', numColors)
-    showColorBar("Blues", numColors)
+    colors = getColorBar('plasma', numColors)
+    showColorBar("plasma", numColors)
     print(colors.shape)
     # status = np.array([list(zip(np.array([0 for i in range(numColors)]), np.array([0 for i in range(numColors)])))])
     status = [np.zeros((numColors, 2))]
@@ -47,7 +48,9 @@ def _main(*args):
     # print(status)
     print(status[0].shape)
 
-    LABColors = cv.cvtColor(colors[np.newaxis, :], cv.COLOR_RGB2BGR).reshape((-1, 3))
+    start = time.time()
+
+    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape((-1, 3))
     # round #1, calculate colors of each frame
     while (cap.isOpened()):
         ret, frame = cap.read()
@@ -62,24 +65,34 @@ def _main(*args):
             draw = ImageDraw.Draw(im)
             textWidth, textHeight = getTextInfoPIL(draw, text)
             # drawImageSingleText(draw, text, font='Consolas', anchor=(imgW // 2 - textWidth // 2, imgH - k * textHeight))
-            resStatus = calculateLoss(draw, frame, im, status[-1], colors, text,
+            resStatus = calculateLoss(draw, frame, im, status[-1], LABColors, text,
                                       anchor=(imgW // 2 - textWidth // 2, imgH - k * textHeight), font=font)
             status.append(resStatus)
         else:
             break
     cap.release()
 
+    print("get color need: ", time.time() - start)
+    start = time.time()
+
     pickedColor = []
-    lastColor = np.argmin(status[-1][:, 0])
-    print(lastColor, end=" ")
+    lastColor = np.argmax(status[-1][:, 0])
+    lossList = []
+    # print(lastColor, end=" ")
     for i in range(len(status)):
-        pickedColor.append(colors[lastColor])
-        lastColor = int(status[len(status) - i - 1][lastColor][1])
-        print(lastColor, end=" ")
-    print()
+        nowColor = lastColor
+        pickedColor.append(LABColors[nowColor])
+        lastColor = int(status[len(status) - i - 1][nowColor][1])
+        lossList.append(
+            str(status[len(status) - i - 1][nowColor][0] - status[len(status) - i - 1][lastColor][0]) + ":" + str(
+                nowColor))
+    #    print(lastColor, end=" ")
+    # print()
+    with open("loss.txt", 'w') as f:
+        f.write("\n".join(lossList))
     resColor = pickedColor[::-1]
-    print(resColor)
-    print(len(resColor))
+    # print(resColor)
+    # print(len(resColor))
 
     # return
     videoWriter = cv.VideoWriter(result_video, fourcc, fps_video, (frame_width, frame_height))
@@ -103,6 +116,8 @@ def _main(*args):
         else:
             videoWriter.release()
             break
+
+    print("write video need: ", time.time() - start)
 
     return 0
 
