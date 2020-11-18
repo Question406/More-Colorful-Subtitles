@@ -30,7 +30,9 @@ def workOnSingleSub(cap, nowSub, font, colors, k):
     cap.set(1, nowSub.start)
     for i in range(nowSub.end - nowSub.start):
         ret, frame = cap.read()
-        resStatus = calculateLoss2(frame, nowStatus[-1], colors, text, chboxs)
+        boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
+        # frame = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
+        resStatus = calculateLoss2(frame, boxs, nowStatus[-1], colors, text, chboxs)
         nowStatus.append(resStatus)
     # with open("/temp/%s.txt"%str(nowSub.start)) as f:
     #     f.write()
@@ -74,11 +76,13 @@ def newWork(*args):
     font = getFont('Consolas', fontSize)
 
     numColors = 256
-    colors = getColorBar('inferno', numColors)
-    showColorBar("inferno", numColors)
+    colors = getColorBar('Blues', numColors)
+    showColorBar("Blues", numColors)
     print(colors.shape)
 
-    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape((-1, 3))
+    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape((-1, 3))
+    with open("temp.txt", 'w') as f:
+        f.write("\n".join([str(x[0]) + ":" + str(x[1]) for x in list(zip(colors, LABColors))]))
 
     # get color
     # k = 6
@@ -405,10 +409,42 @@ def _main(*args):
     return 0
 
 
-funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-# funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 1, 20)
+def tempTry(*args):
+    srcName = args[0]
+    k = int(args[1])
+    fontSize = int(args[2])
+    src = srcName[:-4]
+    videoSrc = './videoSrc/%s' % srcName
+    srtSrc = './subtitle/srt/%s.srt' % src
+    # process srt and load video
+    cap = cv.VideoCapture(videoSrc)
+    fps = cap.get(cv.CAP_PROP_FPS)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    # video = np.empty((frame_height, frame_width, 3))
+    frame_id = 0
+    video = None
+    cap.set(1, 20)
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if ret:
+            if frame_id == 0:
+                video = frame[np.newaxis, :]
+            else:
+                video = np.vstack((video, frame[np.newaxis, :]))
+            frame_id += 1
+            if frame_id == 120:
+                break
+        else:
+            break
+    cap.release()
+
+
+# funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
+# funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
+funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 1, 20)
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 5, 40)
-# funcTime(newWork, 'demo_Trim.mp4', 3, 32)
+# funcTime(newWork, 'demo_Trim.mp4', 5, 32)
 # funcTime(work, 'demo_Trim.mp4', 1, 20)
 # funcTime(work, 'BLACKPINK-Kill_This_Love.mp4')
 # funcTime(_main, 'demo_Trim.mp4')

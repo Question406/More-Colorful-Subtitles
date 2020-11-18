@@ -98,9 +98,9 @@ def getChBoxs(image, text, anchor, font):
     return chboxs
 
 
-def calculateLoss2(frame, lastStatus, colors, text, chboxs):
+def calculateLoss2(frame, boxs, lastStatus, colors, text, chboxs):
     epsilon = 10
-    boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
+    # boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
     for (i, status) in enumerate(resStatus):
         curColorLoss, charPos = d_textRegion2textColor(boxs, colors[i])
