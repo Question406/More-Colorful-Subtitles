@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from cv2 import cv2 as cv
 
-from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, getTransLoss
+from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, getTransLoss, calculateLoss3
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
@@ -39,7 +39,7 @@ def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     return nowStatus
 
 
-def workOnSingleSub(cap, nowSub, font, colors, transLoss, k):
+def workOnSingleSub(cap, nowSub, font, colors, transLoss, k, lastSub, initialStatus):
     print("working on ", nowSub)
     # set to the first frame
     cap.set(1, 0)
@@ -54,7 +54,13 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, k):
     chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
                           font=font)
 
-    nowStatus = [np.zeros(shape=(len(colors), 3))]
+    # nowStatus = [np.zeros(shape=(len(colors), 3))]
+    if initialStatus is None:
+        nowStatus = [np.zeros(shape=(len(colors), 3))]
+    else:
+        nowStatus = initialStatus
+        nowStatus[:, 0] = nowStatus[:, 0] * (0.8) ** (nowSub.start - lastSub.end)
+        nowStatus = [nowStatus]
 
     # set to the start frame
     cap.set(1, nowSub.start)
@@ -62,11 +68,8 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, k):
     for i in range(nowSub.end - nowSub.start):
         ret, frame = cap.read()
         boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
-        # frame = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
-        resStatus = calculateLoss2(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss)
+        resStatus = calculateLoss3(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss)
         nowStatus.append(resStatus)
-    # with open("/temp/%s.txt"%str(nowSub.start)) as f:
-    #     f.write()
     return nowStatus
 
 
@@ -136,7 +139,7 @@ def findChange(cap, src, font, k):
     resultPath = '%s/%s-Subtitle-newwork-change.mp4' % (outputDir, src)
     if os.path.exists(resultPath):
         return
-
+    print("find Change begin!")
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
@@ -200,6 +203,7 @@ def newWork(*args):
     k = int(args[1])
     fontSize = int(args[2])
     src = srcName[:-4]
+    colorWheel = args[3]
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
 
@@ -214,24 +218,25 @@ def newWork(*args):
 
     findChange(cap, src, font, k)
 
-    numColors = 200
-    colors = getColorBar('hsv', numColors)
-    showColorBar("hsv", numColors)
+    numColors = 256
+    colors = getColorBar(colorWheel, numColors)
+    showColorBar(colorWheel, numColors)
     # colors = colors[-30:]
     print(colors.shape)
 
     LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape((-1, 3))
     transLoss = getTransLoss(LABColors)
-    # with open("temp.txt", 'w') as f:
-    #     f.write("\n".join([str(x[0]) + ":" + str(x[1]) for x in list(zip(colors, LABColors))]))
-
     # get color
     # k = 6
     status = {}
+    lastSub = None
+    lastStatus = None
     for sub in subs:
         start = time.time()
-        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, k)
 
+        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, k, lastSub, lastStatus)
+        lastSub = sub
+        lastStatus = status[sub][-1]
         # outputSingleSub(src, cap, sub, status[sub], colors, k, font)
         print(sub, " : ", time.time() - start)
 
@@ -239,7 +244,7 @@ def newWork(*args):
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
-    resultPath = '%s/%s-Subtitle-newwork-fast.mp4' % (outputDir, src)
+    resultPath = '%s/%s-Subtitle-newwork-fast-%s-decay.mp4' % (outputDir, src, colorWheel)
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     # fourcc = cv.VideoWriter_fourcc(*"H264")
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
@@ -586,14 +591,19 @@ def tempTry(*args):
     cap.release()
 
 
-funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
+# funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
 
 # funcTime(newWork, 'rawColors.mp4', 3, 40)
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-# funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 1, 20)
+funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'RdBu')
+# funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
+# funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'RdBu')
+# funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'seismic')
+# for wheel in {'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds'}:
+#     funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, wheel)
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 5, 40)
-# funcTime(newWork, 'demo_Trim.mp4', 5, 32)
+# funcTime(newWork, 'demo_Trim.mp4', 5, 32, 'RdBu')
 # funcTime(work, 'demo_Trim.mp4', 1, 20)
 # funcTime(work, 'BLACKPINK-Kill_This_Love.mp4')
 # funcTime(_main, 'demo_Trim.mp4')

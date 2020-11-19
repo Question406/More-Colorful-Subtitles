@@ -146,9 +146,6 @@ def getChBoxs(image, text, anchor, font):
 def getTransLoss(colors):
     l = len(colors)
     colors = [getStandardLAB(color) for color in colors]
-    # p = getStandardLAB(color)
-    # d = colour.delta_E(colors, np.tile(p, (l, 1)), method='CIE 2000')
-
     temp = [colour.delta_E(colors, np.tile(getStandardLAB(color), (l, 1)), method='CIE 2000') for color in colors]
     res = np.stack(temp)
     return res
@@ -159,8 +156,28 @@ def getBoxMean(boxs):
     return bboxs
 
 
+def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss):
+    epsilon = 10
+    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
+    l = len(boxs)
+    boxs = getBoxMean(boxs)
+    tboxs = np.tile(boxs, (len(colors), 1)).reshape((-1, 3))
+    bboxs = [getStandardLAB(box) for box in tboxs]
+    p = [getStandardLAB(textColor) for textColor in colors]
+    d = colour.delta_E(bboxs, np.tile(p, (1, l)).reshape((-1, 3)), method='CIE 2000')
+    d = d.reshape((len(colors), l))
+
+    for (i, status) in enumerate(resStatus):
+        curColorLoss = d[i].min()
+        temp = int(np.argmax(lastStatus[:, 0] - transLoss[:, i] ** 2))
+        status[0] = lastStatus[int(temp)][0] + curColorLoss
+        status[1] = int(temp)
+        status[2] = 0
+    return resStatus
+
+
 def calculateLoss2(frame, boxs, lastStatus, colors, text, chboxs, transLoss):
-    epsilon = 200
+    epsilon = 10
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
     boxs = getBoxMean(boxs)
 
@@ -199,17 +216,6 @@ def calculateLoss(image, frame, lastStatus, colors, text, anchor, font=getFont('
             s = ''
     boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
 
-    # print(boxs[0])
-
-    # temp = PILToCV2(image)
-    # temp = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
-    # for chbox in chboxs:
-    # frame[chbox[0]: chbox[2], chbox[1]:chbox[3]] = (255, 0, 0)
-    #    frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] = (255, 0, 0)
-
-    # cv.imwrite('temp.png', frame)
-
-    # [(loss, from which color)...]
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
 
     for (i, status) in enumerate(resStatus):
