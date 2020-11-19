@@ -145,10 +145,12 @@ def getChBoxs(image, text, anchor, font):
 
 def getTransLoss(colors):
     l = len(colors)
-    colors = [getStandardLAB(color) for color in colors]
-    temp = [colour.delta_E(colors, np.tile(getStandardLAB(color), (l, 1)), method='CIE 2000') for color in colors]
+    tcolors = [getStandardLAB(color) for color in colors]
+    temp = [colour.delta_E(tcolors, np.tile(color, (l, 1)), method='CIE 2000') for color in tcolors]
+    Temp = [t.argsort()[:35] for t in temp]
     res = np.stack(temp)
-    return res
+    res2 = np.stack(Temp)
+    return res, res2
 
 
 def getBoxMean(boxs):
@@ -156,8 +158,8 @@ def getBoxMean(boxs):
     return bboxs
 
 
-def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss):
-    epsilon = 10
+def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss, indexes):
+    epsilon = 20
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
     l = len(boxs)
     boxs = getBoxMean(boxs)
@@ -167,9 +169,13 @@ def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss):
     d = colour.delta_E(bboxs, np.tile(p, (1, l)).reshape((-1, 3)), method='CIE 2000')
     d = d.reshape((len(colors), l))
 
+    # ind = indexs
     for (i, status) in enumerate(resStatus):
         curColorLoss = d[i].min()
-        temp = int(np.argmax(lastStatus[:, 0] - transLoss[:, i] ** 2))
+        ind = indexes[i]
+        # indexes = transLoss[:, i].argsort()[:epsilon]
+        temp = ind[int(np.argmax(lastStatus[ind, 0] - transLoss[ind, i] ** 2))]
+        # temp = int(np.argmax(lastStatus[:, 0] - transLoss[:, i] ** 2))
         status[0] = lastStatus[int(temp)][0] + curColorLoss
         status[1] = int(temp)
         status[2] = 0

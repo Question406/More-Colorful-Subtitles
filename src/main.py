@@ -39,7 +39,7 @@ def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     return nowStatus
 
 
-def workOnSingleSub(cap, nowSub, font, colors, transLoss, k, lastSub, initialStatus):
+def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, initialStatus):
     print("working on ", nowSub)
     # set to the first frame
     cap.set(1, 0)
@@ -68,7 +68,7 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, k, lastSub, initialSta
     for i in range(nowSub.end - nowSub.start):
         ret, frame = cap.read()
         boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
-        resStatus = calculateLoss3(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss)
+        resStatus = calculateLoss3(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss, indexes)
         nowStatus.append(resStatus)
     return nowStatus
 
@@ -218,14 +218,14 @@ def newWork(*args):
 
     findChange(cap, src, font, k)
 
-    numColors = 256
+    numColors = 1000
     colors = getColorBar(colorWheel, numColors)
     showColorBar(colorWheel, numColors)
     # colors = colors[-30:]
     print(colors.shape)
 
     LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape((-1, 3))
-    transLoss = getTransLoss(LABColors)
+    transLoss, indexes = getTransLoss(LABColors)
     # get color
     # k = 6
     status = {}
@@ -234,7 +234,7 @@ def newWork(*args):
     for sub in subs:
         start = time.time()
 
-        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, k, lastSub, lastStatus)
+        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, indexes, k, lastSub, lastStatus)
         lastSub = sub
         lastStatus = status[sub][-1]
         # outputSingleSub(src, cap, sub, status[sub], colors, k, font)
@@ -473,7 +473,7 @@ def _main(*args):
 
     font = getFont('Consolas', 22)
 
-    numColors = 256
+    numColors = 500
     colors = getColorBar('inferno', numColors)
     showColorBar("inferno", numColors)
     print(colors.shape)
