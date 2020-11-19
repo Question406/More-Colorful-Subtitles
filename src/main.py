@@ -5,12 +5,12 @@ import numpy as np
 from PIL import Image, ImageDraw
 from cv2 import cv2 as cv
 
-from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2
+from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, getTransLoss
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
 
-def workOnSingleSub(cap, nowSub, font, colors, k):
+def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     print("working on ", nowSub)
     # set to the first frame
     cap.set(1, 0)
@@ -22,17 +22,48 @@ def workOnSingleSub(cap, nowSub, font, colors, k):
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    chboxs = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font=font)
+    chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
+                          font=font)
 
     nowStatus = [np.zeros(shape=(len(colors), 3))]
 
     # set to the start frame
     cap.set(1, nowSub.start)
+    # cnt = 0
     for i in range(nowSub.end - nowSub.start):
         ret, frame = cap.read()
         boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
         # frame = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
         resStatus = calculateLoss2(frame, boxs, nowStatus[-1], colors, text, chboxs)
+        nowStatus.append(resStatus)
+    return nowStatus
+
+
+def workOnSingleSub(cap, nowSub, font, colors, transLoss, k):
+    print("working on ", nowSub)
+    # set to the first frame
+    cap.set(1, 0)
+    _, frame = cap.read()
+    text = nowSub.text
+    im = CV2ToPIL(frame)
+    draw = ImageDraw.Draw(im)
+    textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+
+    chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
+                          font=font)
+
+    nowStatus = [np.zeros(shape=(len(colors), 3))]
+
+    # set to the start frame
+    cap.set(1, nowSub.start)
+    # cnt = 0
+    for i in range(nowSub.end - nowSub.start):
+        ret, frame = cap.read()
+        boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
+        # frame = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
+        resStatus = calculateLoss2(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss)
         nowStatus.append(resStatus)
     # with open("/temp/%s.txt"%str(nowSub.start)) as f:
     #     f.write()
@@ -58,6 +89,112 @@ def getPickedColors(resStatus, colors):
     return pickedColor[::-1]
 
 
+def outputSingleSub(src, cap, nowSub, status, colors, k, font):
+    outputDir = './videoOutput/%s' % src
+    if not os.path.exists(outputDir):
+        os.mkdir(outputDir)
+    resultPath = '%s/%s-Subtitle-newwork-%s.mp4' % (outputDir, src, str(nowSub.start))
+    fourcc = cv.VideoWriter_fourcc(*"mp4v")
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    videoWriter = cv.VideoWriter(resultPath, fourcc, cap.get(cv.CAP_PROP_FPS), (frame_width, frame_height))
+
+    resColor = iter(getPickedColors(status, colors))
+
+    cap.set(1, nowSub.start)
+    frame_id = nowSub.start - 1
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if ret:
+            frame_id += 1
+            if frame_id >= nowSub.start and frame_id <= nowSub.end:
+                # RGB
+                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                draw = ImageDraw.Draw(im)
+                if frame_id == nowSub.start:
+                    text = nowSub.text
+                    textWidth, textHeight = getTextInfoPIL(draw, text, font)
+                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                             next(resColor))
+                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
+                videoWriter.write(frame)
+            else:
+                videoWriter.release()
+                break
+        else:
+            videoWriter.release()
+
+
+def findChange(cap, src, font, k):
+    def getMean(b, g, r):
+        return np.array([np.mean(b), np.mean(g), np.mean(r)])
+
+    cap.set(1, 0)
+    outputDir = './videoOutput/%s' % src
+    if not os.path.exists(outputDir):
+        os.mkdir(outputDir)
+    resultPath = '%s/%s-Subtitle-newwork-change.mp4' % (outputDir, src)
+    if os.path.exists(resultPath):
+        return
+
+    fourcc = cv.VideoWriter_fourcc(*"mp4v")
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    videoWriter = cv.VideoWriter(resultPath, fourcc, cap.get(cv.CAP_PROP_FPS), (frame_width, frame_height))
+    lastFrame = None
+    lastMean = None
+
+    text = "Big Change"
+    fpsAll = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+    fps = int(cap.get(cv.CAP_PROP_FPS))
+    last = 0
+    frame_id = 0
+    # flag = False
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if lastFrame is None:
+            lastFrame = frame
+            (b, g, r) = cv.split(frame)
+            lastMean = getMean(b, g, r)
+            continue
+        if ret:
+            frame_id += 1
+            (b, g, r) = cv.split(frame)
+            nowMean = getMean(b, g, r)
+            dis = np.sqrt(np.sum((nowMean - lastMean) ** 2))
+            # print(dis)
+            if dis > 10 or last != 0:
+                if last == 0:
+                    last = fps
+                else:
+                    last -= 1
+
+                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                text = '%s Big Change' % str(frame_id)
+                draw = ImageDraw.Draw(im)
+                textWidth, textHeight = getTextInfoPIL(draw, text, font)
+                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                             (255, 255, 255))
+
+                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
+            else:
+                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                text = '%s normal' % str(frame_id)
+                draw = ImageDraw.Draw(im)
+                textWidth, textHeight = getTextInfoPIL(draw, text, font)
+                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                             (120, 255, 255))
+                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
+
+            lastFrame = frame
+            lastMean = nowMean
+            videoWriter.write(frame)
+        else:
+            videoWriter.release()
+            break
+    print("Find Change Done! ")
+
+
 def newWork(*args):
     srcName = args[0]
     k = int(args[1])
@@ -70,34 +207,41 @@ def newWork(*args):
     cap = cv.VideoCapture(videoSrc)
     fps = cap.get(cv.CAP_PROP_FPS)
     subs = processSRT(srtSrc, fps)
+    # subs = subs[4:5]
     print(subs[0].start)
-
     # process colors and font
     font = getFont('Consolas', fontSize)
 
-    numColors = 256
-    colors = getColorBar('Blues', numColors)
-    showColorBar("Blues", numColors)
+    findChange(cap, src, font, k)
+
+    numColors = 200
+    colors = getColorBar('hsv', numColors)
+    showColorBar("hsv", numColors)
+    # colors = colors[-30:]
     print(colors.shape)
 
     LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape((-1, 3))
-    with open("temp.txt", 'w') as f:
-        f.write("\n".join([str(x[0]) + ":" + str(x[1]) for x in list(zip(colors, LABColors))]))
+    transLoss = getTransLoss(LABColors)
+    # with open("temp.txt", 'w') as f:
+    #     f.write("\n".join([str(x[0]) + ":" + str(x[1]) for x in list(zip(colors, LABColors))]))
 
     # get color
     # k = 6
     status = {}
     for sub in subs:
         start = time.time()
-        status[sub] = workOnSingleSub(cap, sub, font, LABColors, k)
+        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, k)
+
+        # outputSingleSub(src, cap, sub, status[sub], colors, k, font)
         print(sub, " : ", time.time() - start)
 
     # output
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
-    resultPath = '%s/%s-Subtitle-newwork.mp4' % (outputDir, src)
+    resultPath = '%s/%s-Subtitle-newwork-fast.mp4' % (outputDir, src)
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
+    # fourcc = cv.VideoWriter_fourcc(*"H264")
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
     videoWriter = cv.VideoWriter(resultPath, fourcc, fps, (frame_width, frame_height))
@@ -135,6 +279,8 @@ def newWork(*args):
                     nowSub = next(itr)
                     resColor = iter(getPickedColors(status[nowSub], colors))
                     text = nowSub.text
+                    im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                    draw = ImageDraw.Draw(im)
                     textWidth, textHeight = getTextInfoPIL(draw, text, font)
                 except StopIteration:
                     nowSub.start = nowSub.end = int(cap.get(cv.CAP_PROP_FRAME_COUNT)) + 1
@@ -440,9 +586,12 @@ def tempTry(*args):
     cap.release()
 
 
+funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
+
+# funcTime(newWork, 'rawColors.mp4', 3, 40)
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 1, 20)
+# funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 1, 20)
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 5, 40)
 # funcTime(newWork, 'demo_Trim.mp4', 5, 32)
 # funcTime(work, 'demo_Trim.mp4', 1, 20)
