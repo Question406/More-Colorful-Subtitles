@@ -218,9 +218,15 @@ def newWork(*args):
 
     findChange(cap, src, font, k)
 
-    numColors = 1000
-    colors = getColorBar(colorWheel, numColors)
-    showColorBar(colorWheel, numColors)
+    numColors = 256
+    colors = None
+    for colorWheel in ['Blues', 'Oranges', 'Reds']:
+        if colors is None:
+            colors = getColorBar(colorWheel, numColors)
+        else:
+            colors = np.vstack((colors, getColorBar(colorWheel, numColors)))
+    # print(colors.shape)
+    showColorBar(colorWheel, numColors * 4)
     # colors = colors[-30:]
     print(colors.shape)
 
@@ -593,12 +599,13 @@ def tempTry(*args):
 
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
 
-# funcTime(newWork, 'rawColors.mp4', 3, 40)
+# funcTime(newWork, 'rawColors.mp4', 5, 30, 'RdBu')
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-# funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'RdBu')
+
+funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40, 'RdBu')
+# funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'RdBu')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
-# funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'RdBu')
+# funcTime(newWork, 'TWICE-What_Is_Love.mp4', 6, 40, 'RdBu')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'seismic')
 # for wheel in {'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds'}:
 #     funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, wheel)

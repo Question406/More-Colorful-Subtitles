@@ -147,7 +147,7 @@ def getTransLoss(colors):
     l = len(colors)
     tcolors = [getStandardLAB(color) for color in colors]
     temp = [colour.delta_E(tcolors, np.tile(color, (l, 1)), method='CIE 2000') for color in tcolors]
-    Temp = [t.argsort()[:35] for t in temp]
+    Temp = [t.argsort()[:30] for t in temp]
     res = np.stack(temp)
     res2 = np.stack(Temp)
     return res, res2
