@@ -219,7 +219,7 @@ def newWork(*args):
 
     findChange(cap, src, font, k)
 
-    numColors = 1000
+    numColors = 256
     colors = getColorBar(colorWheel, numColors)  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
     showColorBar(colorWheel, numColors)
     # colors = colors[-30:]

@@ -162,29 +162,26 @@ def getTransLoss(colors):
 
 
 def getBoxMean(boxs):
-    bboxs = np.stack([np.mean(box.reshape(-1, 3), axis=0) for box in boxs])
+    bboxs = np.stack([box.reshape(-1, 3).mean(axis=0) for box in boxs]).astype(np.float32)
     return bboxs
 
 
 def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss, indexes):
     epsilon = 20
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
-    l = len(boxs)
     boxs = getBoxMean(boxs)
-    tboxs = np.tile(boxs, (len(colors), 1)).reshape((-1, 3))
-    bboxs = [opencvLAB2standardLAB(box) for box in tboxs]
-    p = [opencvLAB2standardLAB(textColor) for textColor in colors]
-    d = colour.delta_E(bboxs, np.tile(p, (1, l)).reshape((-1, 3)), method='CIE 2000')
-    d = d.reshape((len(colors), l))
+    boxs_standardLAB = opencvLAB2standardLAB(boxs)  # shape: (box_num x 3)
+    palatte_standardLAB = opencvLAB2standardLAB(colors)    # shape: (256 x 3)
+    distance = colour.delta_E(boxs_standardLAB[None, :, :], palatte_standardLAB[:, None, :], method='CIE 2000')  # shape: (256 x box_num)
+    min_distance_per_color = distance.min(axis=1)
 
     # ind = indexs
     for (i, status) in enumerate(resStatus):
-        curColorLoss = d[i].min()
         ind = indexes[i]
         # indexes = transLoss[:, i].argsort()[:epsilon]
         temp = ind[int(np.argmax(lastStatus[ind, 0] - transLoss[ind, i] ** 2))]
         # temp = int(np.argmax(lastStatus[:, 0] - transLoss[:, i] ** 2))
-        status[0] = lastStatus[int(temp)][0] + curColorLoss
+        status[0] = lastStatus[int(temp)][0] + min_distance_per_color[i]
         status[1] = int(temp)
         status[2] = 0
     return resStatus
