@@ -1,4 +1,4 @@
-# from cv2 import cv2 as cv
+from cv2 import cv2 as cv
 # import matplotlib as mpl
 
 import colour
@@ -7,6 +7,7 @@ import numpy as np
 from colormath.color_diff import delta_e_cie2000
 from colormath.color_objects import LabColor
 
+from color_conversion import *
 from utils import getFont
 
 
@@ -32,14 +33,6 @@ def deltaE(color1, color2):
     C1 = LabColor(float(color1[0]) / 255 * 100, float(color1[1] - 127.0), float(color1[2] - 127.0))
     C2 = LabColor(float(color2[0]) / 255 * 100, float(color2[1] - 127.0), float(color2[2] - 127.0))
     return delta_e_cie2000(C1, C2)
-
-
-def getStandardLAB(x):
-    y = x.astype(np.float32)
-    y[0] = x[0] / 255.0 * 100
-    y[1] = x[1] - 128.0
-    y[2] = x[2] - 128.0
-    return y
 
 
 def _d_textRegion2textColor(bbox, textColor):
@@ -68,8 +61,8 @@ def d_textRegion2textColor(bboxs, textColor):
              min(d(bbox, textColor)), where d is a distance function
     """
     l = len(bboxs)
-    bboxs = [getStandardLAB(box) for box in bboxs]
-    p = getStandardLAB(textColor)
+    bboxs = [opencvLAB2standardLAB(box) for box in bboxs]
+    p = opencvLAB2standardLAB(textColor)
     d = colour.delta_E(bboxs, np.tile(p, (l, 1)), method='CIE 2000')
     t = np.argsort(d)[0]
     return d[t], t
@@ -106,6 +99,21 @@ def showColorBar(bar_kind, num):
     ax.imshow(gradient, aspect='auto', cmap=cmap)
     ax.set_axis_off()
     plt.show()
+
+
+def showColorBarWithArray(bar_array):
+    """
+    :param bar_array: color bar array ([R, G, B]) with scale (0, 255)
+    """
+    bar_array = bar_array.astype(int)
+    gradient = np.stack((bar_array, bar_array), axis=0)  # convert to 2-dimension
+    fig, ax = plt.subplots(nrows=1)
+    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
+    ax.set_title('colormaps', fontsize=14)
+    ax.imshow(gradient, aspect='auto')
+    ax.set_axis_off()
+    plt.show()
+
 
 def getColorBar(bar_kind, num):
     """
@@ -145,7 +153,7 @@ def getChBoxs(image, text, anchor, font):
 
 def getTransLoss(colors):
     l = len(colors)
-    tcolors = [getStandardLAB(color) for color in colors]
+    tcolors = [opencvLAB2standardLAB(color) for color in colors]
     temp = [colour.delta_E(tcolors, np.tile(color, (l, 1)), method='CIE 2000') for color in tcolors]
     Temp = [t.argsort()[:35] for t in temp]
     res = np.stack(temp)
@@ -164,8 +172,8 @@ def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss, ind
     l = len(boxs)
     boxs = getBoxMean(boxs)
     tboxs = np.tile(boxs, (len(colors), 1)).reshape((-1, 3))
-    bboxs = [getStandardLAB(box) for box in tboxs]
-    p = [getStandardLAB(textColor) for textColor in colors]
+    bboxs = [opencvLAB2standardLAB(box) for box in tboxs]
+    p = [opencvLAB2standardLAB(textColor) for textColor in colors]
     d = colour.delta_E(bboxs, np.tile(p, (1, l)).reshape((-1, 3)), method='CIE 2000')
     d = d.reshape((len(colors), l))
 
@@ -238,3 +246,35 @@ def calculateLoss(image, frame, lastStatus, colors, text, anchor, font=getFont('
         status[2] = charPos
 
     return resStatus
+
+def findMaxDeltaEColor(labColor, iter=500):
+    """
+    :param labColor: lab color in standard range [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
+    :param iter: random number of iteration, the result will be more precise with larger number
+    :return: the approximate color with maximum deltaE regard to labColor
+    """
+    maxDelta_E = 0
+    maxL = None
+    maxa = None
+    maxb = None
+    for i in range(iter):
+        L = np.random.randint(0, 100)
+        a = np.random.randint(-128, 127)
+        b = np.random.randint(-128, 127)
+        delta_E = colour.delta_E(labColor, [L, a, b], method="CIE 2000")
+        if delta_E > maxDelta_E:
+            maxDelta_E = delta_E
+            maxL = L
+            maxa = a
+            maxb = b
+    assert maxL is not None
+    assert maxa is not None
+    assert maxb is not None
+    maxStandardLabColor = np.array([L,a,b])
+    print("color with maximum delta E found : {}".format(maxDelta_E))
+    print(maxStandardLabColor)
+    maxOpencvLabColor = standardLAB2opencvLAB(maxStandardLabColor)[np.newaxis, np.newaxis, :]\
+        .astype(np.uint8)
+    maxRGBColor = cv.cvtColor(maxOpencvLabColor, cv.COLOR_LAB2RGB).reshape((1, 1, 3))
+    plt.imshow(maxRGBColor/255.0)
+    plt.show()

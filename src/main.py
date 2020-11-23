@@ -9,6 +9,7 @@ from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculate
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
+LOSS_DECAY_RATIO = 0.8
 
 def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     print("working on ", nowSub)
@@ -59,7 +60,7 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, i
         nowStatus = [np.zeros(shape=(len(colors), 3))]
     else:
         nowStatus = initialStatus
-        nowStatus[:, 0] = nowStatus[:, 0] * (0.8) ** (nowSub.start - lastSub.end)
+        nowStatus[:, 0] = nowStatus[:, 0] * (LOSS_DECAY_RATIO) ** (nowSub.start - lastSub.end)
         nowStatus = [nowStatus]
 
     # set to the start frame
@@ -219,12 +220,15 @@ def newWork(*args):
     findChange(cap, src, font, k)
 
     numColors = 1000
-    colors = getColorBar(colorWheel, numColors)
+    colors = getColorBar(colorWheel, numColors)  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
     showColorBar(colorWheel, numColors)
     # colors = colors[-30:]
     print(colors.shape)
 
-    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape((-1, 3))
+    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape(
+        (-1, 3))  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
+    RGBColors = cv.cvtColor(np.array(LABColors[np.newaxis, :], dtype=np.uint8), cv.COLOR_LAB2RGB).reshape(
+        (-1, 3))  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
     transLoss, indexes = getTransLoss(LABColors)
     # get color
     # k = 6
@@ -234,7 +238,7 @@ def newWork(*args):
     for sub in subs:
         start = time.time()
 
-        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, indexes, k, lastSub, lastStatus)
+        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, indexes, k, lastSub, initialStatus=lastStatus)
         lastSub = sub
         lastStatus = status[sub][-1]
         # outputSingleSub(src, cap, sub, status[sub], colors, k, font)
@@ -485,7 +489,8 @@ def _main(*args):
 
     start = time.time()
 
-    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape((-1, 3))
+    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2BGR).reshape(
+        (-1, 3))  # Error !
     # round #1, calculate colors of each frame
     while (cap.isOpened()):
         ret, frame = cap.read()
