@@ -11,3 +11,9 @@ http://colormine.org/delta-e-calculator/cie2000
 # Further thinking
 1. Color harmony measurement
 
+2. 对于字与背景的距离计算也可以考虑用背景k聚类后得到的结果
+
+# Possiblle Experiment
+1. 字幕背景变化较小，整体画面颜色有较大变化
+
+2. 

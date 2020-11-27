@@ -9,6 +9,9 @@ from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculate
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+
 LOSS_DECAY_RATIO = 0.8
 
 def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
@@ -198,6 +201,72 @@ def findChange(cap, src, font, k):
             break
     print("Find Change Done! ")
 
+def analysisColorTune(cap, sampleNum = 500, n_cluster = 5):
+    plotHeight = 50
+    def centroid_histogram(clt):
+        """
+        :param clt: the cluster fit by k-means
+        :return: the percentage histogram of clusters
+        """
+        # grab the number of different clusters and create a histogram
+        # based on the number of pixels assigned to each cluster
+        numLabels = np.arange(0, len(np.unique(clt.labels_)) + 1)
+        (hist, _) = np.histogram(clt.labels_, bins=numLabels)
+
+        # normalize the histogram, such that it sums to one
+        hist = hist.astype("float")
+        hist /= hist.sum()
+
+        # return the histogram
+        return hist
+
+    def plotColorTune(sample_palattes):
+        sample_palattes = np.array(sample_palattes).astype(np.int).swapaxes(0,1)
+        fig, ax = plt.subplots(nrows=1)
+        fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
+        ax.set_title('colormaps', fontsize=14)
+        ax.imshow(sample_palattes, aspect='auto')
+        ax.set_axis_off()
+        plt.show()
+
+
+    print("Video Color Tune Analysis Begin!")
+    clt = KMeans(n_clusters=n_cluster)
+    cap.set(1, 1)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    length = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+    sample_x_indices = np.random.randint(0, frame_width, size=(sampleNum))
+    sample_y_indices = np.random.randint(0, frame_height, size=(sampleNum))
+
+    current_frame = 0
+    start = time.time()
+    sample_palattes = []
+    while cap.isOpened():
+        current_frame += 1
+        ret, frame = cap.read()
+        if ret and current_frame < 500:
+            if current_frame % 100 == 0:
+                print("Frame:{}, Time:{}".format(current_frame, time.time() - start))
+            sample_color = cv.cvtColor(frame[None, sample_y_indices, sample_x_indices, :], cv.COLOR_BGR2RGB).squeeze()
+            clt.fit(sample_color)
+            centroids_percent = centroid_histogram(clt)
+            centroids = clt.cluster_centers_
+
+            # Collect Palatte Information
+            index = np.argsort(centroids_percent)
+            current_palatte = np.zeros(shape=(plotHeight, 3))
+            current_height = 0
+            for i in range(len(clt.cluster_centers_)):
+                next_height = int(current_height + plotHeight * centroids_percent[index[i]])
+                current_palatte[current_height: next_height] = centroids[[index[i]]]
+                current_height = next_height
+            sample_palattes.append(current_palatte)
+        else:
+            plotColorTune(sample_palattes)
+            break
+    print("Analysis Finished")
+
 
 def newWork(*args):
     srcName = args[0]
@@ -217,7 +286,8 @@ def newWork(*args):
     # process colors and font
     font = getFont('Consolas', fontSize)
 
-    findChange(cap, src, font, k)
+    # findChange(cap, src, font, k)
+    analysisColorTune(cap)
 
     numColors = 256
     colors = getColorBar(colorWheel, numColors)  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
@@ -270,7 +340,7 @@ def newWork(*args):
     cap.set(1, 1)
 
     frame_id = 0
-    while (cap.isOpened()):
+    while cap.isOpened():
         ret, frame = cap.read()
         if ret:
             frame_id += 1

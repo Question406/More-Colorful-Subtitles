@@ -140,6 +140,8 @@ cython_debug/
 # vscode
 .vscode/
 
+# .idea
+.idea/
 
 # video
 *.mp4
