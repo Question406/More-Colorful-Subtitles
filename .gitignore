@@ -146,3 +146,6 @@ cython_debug/
 # video
 *.mp4
 *.flv
+
+# color model
+*.pkl

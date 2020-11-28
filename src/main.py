@@ -271,9 +271,9 @@ def analysisColorTune(cap, sampleNum = 500, n_cluster = 5):
 def newWork(*args):
     srcName = args[0]
     k = int(args[1])
-    fontSize = int(args[2])
     src = srcName[:-4]
     colorWheel = args[3]
+    fontSize = int(args[2])
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
 
@@ -287,7 +287,7 @@ def newWork(*args):
     font = getFont('Consolas', fontSize)
 
     # findChange(cap, src, font, k)
-    analysisColorTune(cap)
+    # analysisColorTune(cap)
 
     numColors = 256
     colors = getColorBar(colorWheel, numColors)  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
