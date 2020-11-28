@@ -7,8 +7,8 @@ import pickle
 
 class Palette:
     def __init__(self):
-        self.L_sampleNum = 52
-        self.a_sampleNum = self.b_sampleNum = 52
+        self.L_sampleNum = 30
+        self.a_sampleNum = self.b_sampleNum = 30
         total_sampleNum = self.L_sampleNum * self.a_sampleNum * self.b_sampleNum
         LAB_shape = (self.L_sampleNum, self.a_sampleNum, self.b_sampleNum)
         # comparison only happened  between samples in 2 x compareRange
@@ -42,7 +42,7 @@ class Palette:
             reshape((self.L_sampleNum, self.a_sampleNum, self.b_sampleNum))
         nearby_indexes = np.zeros(shape=(self.L_sampleNum, self.a_sampleNum, self.b_sampleNum, tranfer_totalNum),
                                   dtype=np.int)
-        nearby_colors = np.zeros(shape=(self.L_sampleNum, self.a_sampleNum, self.b_sampleNum, tranfer_totalNum, 3))
+        # nearby_colors = np.zeros(shape=(self.L_sampleNum, self.a_sampleNum, self.b_sampleNum, tranfer_totalNum, 3))
         nearby_deltaEs = np.zeros(shape=(self.L_sampleNum, self.a_sampleNum, self.b_sampleNum, tranfer_totalNum))
         count = 1
         for L in range(self.L_sampleNum):
@@ -61,15 +61,31 @@ class Palette:
                     nearby_deltaE = colour.delta_E(standardLAB[L, a, b], nearby_color)
                     order = np.argsort(nearby_deltaE)
                     nearby_indexes[L, a, b, :tranfer_totalNum] = nearby_index[order][:tranfer_totalNum]
-                    nearby_colors[L, a, b, :tranfer_totalNum] = nearby_color[order][:tranfer_totalNum, :]
+                    # nearby_colors[L, a, b, :tranfer_totalNum] = nearby_color[order][:tranfer_totalNum, :]
                     nearby_deltaEs[L, a, b, :tranfer_totalNum] = nearby_deltaE[order][:tranfer_totalNum]
         self.standardLAB = standardLAB.reshape(-1, 3)
         self.nearby_indexes = nearby_indexes.reshape(-1, tranfer_totalNum)
-        self.nearby_colors = nearby_colors.reshape(-1, tranfer_totalNum, 3)
+        # self.nearby_colors = nearby_colors.reshape(-1, tranfer_totalNum, 3) # too big to store
         self.nearby_deltaEs = nearby_deltaEs.reshape((-1, tranfer_totalNum))
+        self.DP_before_index = np.zeros(total_sampleNum)
+        self.DP_before_index[:] = np.nan
+        self.DP_loss = np.zeros(total_sampleNum)
+        self.DP_loss[:] = np.infty
 
 
-palette = Palette()
-file_to_store = open("color_model.pkl", "wb")
-pickle.dump(palette, file_to_store)
-file_to_store.close()
+def create_save_palette():
+    palette = Palette()
+    file_to_store = open("color_model.pkl", "wb")
+    pickle.dump(palette, file_to_store)
+    file_to_store.close()
+
+
+def load_palette():
+    file_to_load = open("color_model.pkl", "rb")
+    palette = pickle.load(file_to_load)
+    file_to_load.close()
+    return palette
+
+
+# create_save_palette()
+my_palette = load_palette()
