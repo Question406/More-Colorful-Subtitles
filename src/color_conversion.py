@@ -3,7 +3,7 @@ import numpy as np
 
 def standardLCH2standardLAB(x):
     """
-    :param x: [(0 ~ 100), (-pi/2 ~ pi/2), (-pi/2 ~ pi/2)]
+    :param x: [(0 ~ 100), ..., (-pi ~ pi)]
     :return: [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
     """
     y = x.astype(np.float32)
@@ -16,14 +16,21 @@ def standardLCH2standardLAB(x):
 def standardLAB2standardLCH(x):
     """
     :param x: [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
-    :return: [(0 ~ 100), ..., (-pi/2 ~ pi/2)]
+    :return: [(0 ~ 100), ..., (-pi ~ pi)]
     """
     y = x.astype(np.float32)
     y[..., 0] = x[..., 0]
     y[..., 1] = np.sqrt(x[..., 1]**2 + x[..., 2]**2)
-    y[..., 2] = np.arctan(x[...,2] / x[..., 1])
-    y[x[..., 1] < 0, 2] += np.pi
+    y[..., 2] = np.arctan(x[..., 2] / x[..., 1])
+    y[np.logical_and(x[..., 1] <= 0, x[..., 2] > 0), 2] += np.pi
+    y[np.logical_and(x[..., 1] < 0, x[..., 2] < 0), 2] -= np.pi
     y[np.isnan(y[..., 2]), 2] = np.pi / 2
+    return y
+
+def oppositeStandardLCH(x):
+    y = x.astype(np.float32)
+    y[x[..., 2] <= 0, 2] += np.pi
+    y[x[..., 2] > 0, 2] -= np.pi
     return y
 
 
@@ -48,4 +55,4 @@ def standardLAB2opencvLAB(x):
     y[..., 0] = x[..., 0] / 100.0 * 255
     y[..., 1] = x[..., 1] + 128.0
     y[..., 2] = x[..., 2] + 128.0
-    return y
+    return y.astype(np.uint8)

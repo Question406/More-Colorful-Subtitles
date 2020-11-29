@@ -165,14 +165,40 @@ def getBoxMean(boxs):
     bboxs = np.stack([box.reshape(-1, 3).mean(axis=0) for box in boxs]).astype(np.float32)
     return bboxs
 
+def calculateLoss4(boxes, palette, search_index):
+    transloss_beta = 0.1
+    boxes = getBoxMean(boxes)
+    boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
+    palette_standardLAB = palette.standardLAB[search_index]
+    distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
+                              method='CIE 2000')  # shape: (palette_color_num x box_num)
+    min_distance_each_color = distance.min(axis=1)   # shape: (palette_color_num)
 
-def calculateLoss3(frame, boxs, lastStatus, colors, text, chboxs, transLoss, indexes):
+    previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
+                              + transloss_beta * palette.nearby_deltaEs[search_index[:]]**2
+                                # shape: (palette_color_num x nearby_color_num)
+    tmp_argmin = np.argmin(previous_color_loss_table, axis=1) # shape: (palette_color_num)
+    DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
+    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] - min_distance_each_color
+
+    # Update palette
+    palette.DP_previous_index[search_index] = DP_previous_index # Can be abandoned, it's useless
+    palette.DP_loss[:] = np.inf # Can be optimized using the previous search_index
+    palette.DP_loss[search_index] = DP_loss
+
+    return DP_previous_index, DP_loss
+
+
+
+
+def calculateLoss3(frame, boxes, lastStatus, colors, text, chboxs, transLoss, indexes):
     epsilon = 20
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
-    boxs = getBoxMean(boxs)
-    boxs_standardLAB = opencvLAB2standardLAB(boxs)  # shape: (box_num x 3)
-    palatte_standardLAB = opencvLAB2standardLAB(colors)    # shape: (256 x 3)
-    distance = colour.delta_E(boxs_standardLAB[None, :, :], palatte_standardLAB[:, None, :], method='CIE 2000')  # shape: (256 x box_num)
+    boxes = getBoxMean(boxes)
+    boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
+    palette_standardLAB = opencvLAB2standardLAB(colors)    # shape: (256 x 3)
+    distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
+                              method='CIE 2000')  # shape: (256 x box_num)
     min_distance_per_color = distance.min(axis=1)
 
     # ind = indexs

@@ -1,18 +1,19 @@
 import os
 import time
 
-import numpy as np
 from PIL import Image, ImageDraw
-from cv2 import cv2 as cv
 
-from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, getTransLoss, calculateLoss3
+from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, calculateLoss3, calculateLoss4
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
-from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
+from Palette import *
+from color_conversion import *
+from functools import reduce
+from ColorTuneAnalyzer import *
 
 LOSS_DECAY_RATIO = 0.8
+
 
 def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     print("working on ", nowSub)
@@ -77,6 +78,65 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, i
     return nowStatus
 
 
+def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer):
+    tune_num = 2
+    hue_range = 0.05
+    print("working on ", now_sub)
+
+    # initialize palette
+    palette.DP_loss[:] = np.inf
+    palette.DP_previous_index[:] = np.nan
+
+    # locate boxes
+    cap.set(1, 0)
+    _, frame = cap.read()
+    text = now_sub.text
+    im = CV2ToPIL(frame)
+    draw = ImageDraw.Draw(im)
+    textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
+                          font=font)
+
+    def _is_in_search_space(hues, hue_range, color_array):
+        def _is_in_single_search_space(single_hue, single_hue_range, color_array):
+            return np.logical_or(
+                np.abs(color_array[:, 2] - single_hue) < single_hue_range,
+                np.abs(color_array[:, 2] - (single_hue + 2*np.pi)) < single_hue_range,
+                np.abs(color_array[:, 2] - (single_hue_range - 2*np.pi)) < single_hue_range
+            )
+
+        return reduce(np.logical_or,
+                      [_is_in_single_search_space(hue, hue_range, color_array) for hue in hues])
+
+    # set to the start frame
+    cap.set(1, now_sub.start)
+    sub_status = {}
+    sub_status["search_color_index"] = []
+    sub_status["DP_previous_index"] = []
+    sub_status["DP_loss"] = []
+    sub_status["total_frame"] = now_sub.end - now_sub.start + 1
+    for i in range(sub_status["total_frame"]):
+        ret, frame = cap.read()
+        color_tune = color_analyzer.analyzeImage(frame)
+        color_tune = standardLAB2standardLCH(color_tune[:tune_num])
+        opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
+        search_color_index = np.where(_is_in_search_space(hues=opposite_hue, hue_range=hue_range,
+                                                          color_array=palette.standardLCH))[0]
+        search_color_index = np.hstack([palette.center_point_index, search_color_index])
+        # Init DP loss for the first frame
+        if i == 0:
+            palette.DP_loss[search_color_index] = 0
+
+        sub_status["search_color_index"].append(search_color_index)
+        boxes = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
+        DP_previous_index, DP_loss = calculateLoss4(boxes=boxes, palette=palette, search_index=search_color_index)
+        sub_status["DP_previous_index"].append(DP_previous_index)
+        sub_status["DP_loss"].append(DP_loss)
+    return sub_status
+
+
 def getPickedColors(resStatus, colors):
     pickedColor = []
     printList = []
@@ -93,6 +153,15 @@ def getPickedColors(resStatus, colors):
             str(resStatus[len(resStatus) - i - 1][nowColor][2]))
     with open("loss.txt", 'w') as f:
         f.write("\n".join(printList))
+    return pickedColor[::-1]
+
+def getPickedColor_2(sub_status, palette):
+    pickedColor = []
+    last_color_index = sub_status["search_color_index"][-1][np.argmin(sub_status["DP_loss"][-1])]
+    for i in range(1, sub_status["total_frame"]+1):
+        pickedColor.append(palette.standardRGB[last_color_index])
+        tmp_index = np.where(sub_status["search_color_index"][-i] == last_color_index)[0][0]
+        last_color_index = sub_status["DP_previous_index"][-i][tmp_index]
     return pickedColor[::-1]
 
 
@@ -201,72 +270,6 @@ def findChange(cap, src, font, k):
             break
     print("Find Change Done! ")
 
-def analysisColorTune(cap, sampleNum = 500, n_cluster = 5):
-    plotHeight = 50
-    def centroid_histogram(clt):
-        """
-        :param clt: the cluster fit by k-means
-        :return: the percentage histogram of clusters
-        """
-        # grab the number of different clusters and create a histogram
-        # based on the number of pixels assigned to each cluster
-        numLabels = np.arange(0, len(np.unique(clt.labels_)) + 1)
-        (hist, _) = np.histogram(clt.labels_, bins=numLabels)
-
-        # normalize the histogram, such that it sums to one
-        hist = hist.astype("float")
-        hist /= hist.sum()
-
-        # return the histogram
-        return hist
-
-    def plotColorTune(sample_palattes):
-        sample_palattes = np.array(sample_palattes).astype(np.int).swapaxes(0,1)
-        fig, ax = plt.subplots(nrows=1)
-        fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
-        ax.set_title('colormaps', fontsize=14)
-        ax.imshow(sample_palattes, aspect='auto')
-        ax.set_axis_off()
-        plt.show()
-
-
-    print("Video Color Tune Analysis Begin!")
-    clt = KMeans(n_clusters=n_cluster)
-    cap.set(1, 1)
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-    length = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-    sample_x_indices = np.random.randint(0, frame_width, size=(sampleNum))
-    sample_y_indices = np.random.randint(0, frame_height, size=(sampleNum))
-
-    current_frame = 0
-    start = time.time()
-    sample_palattes = []
-    while cap.isOpened():
-        current_frame += 1
-        ret, frame = cap.read()
-        if ret and current_frame < 500:
-            if current_frame % 100 == 0:
-                print("Frame:{}, Time:{}".format(current_frame, time.time() - start))
-            sample_color = cv.cvtColor(frame[None, sample_y_indices, sample_x_indices, :], cv.COLOR_BGR2RGB).squeeze()
-            clt.fit(sample_color)
-            centroids_percent = centroid_histogram(clt)
-            centroids = clt.cluster_centers_
-
-            # Collect Palatte Information
-            index = np.argsort(centroids_percent)
-            current_palatte = np.zeros(shape=(plotHeight, 3))
-            current_height = 0
-            for i in range(len(clt.cluster_centers_)):
-                next_height = int(current_height + plotHeight * centroids_percent[index[i]])
-                current_palatte[current_height: next_height] = centroids[[index[i]]]
-                current_height = next_height
-            sample_palattes.append(current_palatte)
-        else:
-            plotColorTune(sample_palattes)
-            break
-    print("Analysis Finished")
-
 
 def newWork(*args):
     srcName = args[0]
@@ -281,48 +284,37 @@ def newWork(*args):
     cap = cv.VideoCapture(videoSrc)
     fps = cap.get(cv.CAP_PROP_FPS)
     subs = processSRT(srtSrc, fps)
-    # subs = subs[4:5]
-    print(subs[0].start)
+
     # process colors and font
     font = getFont('Consolas', fontSize)
 
     # findChange(cap, src, font, k)
     # analysisColorTune(cap)
 
-    numColors = 256
-    colors = getColorBar(colorWheel, numColors)  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
-    showColorBar(colorWheel, numColors)
-    # colors = colors[-30:]
-    print(colors.shape)
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    LABColors = cv.cvtColor(np.array(colors[np.newaxis, :], dtype=np.uint8), cv.COLOR_RGB2LAB).reshape(
-        (-1, 3))  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
-    RGBColors = cv.cvtColor(np.array(LABColors[np.newaxis, :], dtype=np.uint8), cv.COLOR_LAB2RGB).reshape(
-        (-1, 3))  # Range:[(0 ~ 255), (0 ~ 255), (0 ~ 255)]
-    transLoss, indexes = getTransLoss(LABColors)
-    # get color
-    # k = 6
+    my_palette = load_palette()
+    color_tune_analyzer = ColorTuneAnalyzer(frame_width=frame_width, frame_height=frame_height)
+
     status = {}
-    lastSub = None
-    lastStatus = None
+
     for sub in subs:
         start = time.time()
 
-        status[sub] = workOnSingleSub(cap, sub, font, LABColors, transLoss, indexes, k, lastSub, initialStatus=lastStatus)
-        lastSub = sub
-        lastStatus = status[sub][-1]
-        # outputSingleSub(src, cap, sub, status[sub], colors, k, font)
+        status[sub] = workOnSingleSub_2(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
+                                        color_analyzer=color_tune_analyzer)
+
+
         print(sub, " : ", time.time() - start)
 
     # output
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
-    resultPath = '%s/%s-Subtitle-newwork-fast-%s-decay.mp4' % (outputDir, src, colorWheel)
+    resultPath = '%s/%s-Subtitle-3d-fast-%s-decay.mp4' % (outputDir, src, colorWheel)
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     # fourcc = cv.VideoWriter_fourcc(*"H264")
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
     videoWriter = cv.VideoWriter(resultPath, fourcc, fps, (frame_width, frame_height))
 
     # add subtitle and output
@@ -330,7 +322,7 @@ def newWork(*args):
     _, frame = cap.read()
     itr = iter(subs)
     nowSub = next(itr)
-    resColor = iter(getPickedColors(status[nowSub], colors))
+    resColor = iter(getPickedColor_2(status[nowSub], my_palette))
     text = nowSub.text
 
     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
@@ -356,7 +348,7 @@ def newWork(*args):
             elif frame_id > nowSub.end:
                 try:
                     nowSub = next(itr)
-                    resColor = iter(getPickedColors(status[nowSub], colors))
+                    resColor = iter(getPickedColor_2(status[nowSub], my_palette))
                     text = nowSub.text
                     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
                     draw = ImageDraw.Draw(im)
@@ -671,7 +663,7 @@ def tempTry(*args):
 # funcTime(newWork, 'rawColors.mp4', 3, 40)
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'RdBu')
+funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, '3d')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'RdBu')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'seismic')

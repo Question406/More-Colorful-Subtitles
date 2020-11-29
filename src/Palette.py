@@ -51,10 +51,11 @@ class Palette:
                     count += 1
                     if count % 500 == 0:
                         print("Count : {}".format(count))
-                    L_min, a_min, b_min = max(L - L_compareIndexRange, 0), max(a - a_compareIndexRange, 0), \
+                    L_min, a_min, b_min = max(L - L_compareIndexRange, 0), \
+                                          max(a - a_compareIndexRange, 0), \
                                           max(b - b_compareIndexRange, 0)
-                    L_max, a_max, b_max = min(L + L_compareIndexRange, self.L_sampleNum), min(a + a_compareIndexRange,
-                                                                                              self.a_sampleNum), \
+                    L_max, a_max, b_max = min(L + L_compareIndexRange, self.L_sampleNum), \
+                                          min(a + a_compareIndexRange, self.a_sampleNum), \
                                           min(b + b_compareIndexRange, self.b_sampleNum)
                     nearby_index = index_3_dimension[L_min: L_max, a_min: a_max, b_min: b_max].reshape(-1)
                     nearby_color = standardLAB[L_min: L_max, a_min: a_max, b_min: b_max].reshape(-1, 3)
@@ -64,13 +65,19 @@ class Palette:
                     # nearby_colors[L, a, b, :tranfer_totalNum] = nearby_color[order][:tranfer_totalNum, :]
                     nearby_deltaEs[L, a, b, :tranfer_totalNum] = nearby_deltaE[order][:tranfer_totalNum]
         self.standardLAB = standardLAB.reshape(-1, 3)
+        self.standardLCH = standardLAB2standardLCH(self.standardLAB)
+        opencvLAB = standardLAB2opencvLAB(self.standardLAB)
+        self.standardRGB = cv.cvtColor(opencvLAB[None, ...], cv.COLOR_LAB2RGB).squeeze() # cause some deviation use int8
         self.nearby_indexes = nearby_indexes.reshape(-1, tranfer_totalNum)
         # self.nearby_colors = nearby_colors.reshape(-1, tranfer_totalNum, 3) # too big to store
         self.nearby_deltaEs = nearby_deltaEs.reshape((-1, tranfer_totalNum))
-        self.DP_before_index = np.zeros(total_sampleNum)
-        self.DP_before_index[:] = np.nan
+        self.DP_previous_index = np.zeros(total_sampleNum)  # Can be abandoned
+        self.DP_previous_index[:] = np.nan
         self.DP_loss = np.zeros(total_sampleNum)
         self.DP_loss[:] = np.infty
+
+        self.center_point_index = np.where(self.standardLCH[:, 1] < 20)[0]
+
 
 
 def create_save_palette():
@@ -81,11 +88,13 @@ def create_save_palette():
 
 
 def load_palette():
-    file_to_load = open("color_model.pkl", "rb")
+    file_to_load = open("src/color_model.pkl", "rb")    ## ?????
     palette = pickle.load(file_to_load)
     file_to_load.close()
     return palette
 
 
-# create_save_palette()
-my_palette = load_palette()
+if __name__ == "__main__":
+    create_save_palette()
+    my_palette = load_palette()
+    print("oh my god")

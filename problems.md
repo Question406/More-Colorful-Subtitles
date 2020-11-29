@@ -17,3 +17,8 @@ http://colormine.org/delta-e-calculator/cie2000
 1. 字幕背景变化较小，整体画面颜色有较大变化
 
 2. 
+
+# Implementation List
+1. 取缔k值
+
+2. LAB空间有相当一部分采样点没有RGB对应点。。
