@@ -7,20 +7,20 @@ import pickle
 
 class Palette:
     def __init__(self):
-        self.L_sampleNum = 30
-        self.a_sampleNum = self.b_sampleNum = 30
+        self.L_sampleNum = 40
+        self.a_sampleNum = self.b_sampleNum = 40
         total_sampleNum = self.L_sampleNum * self.a_sampleNum * self.b_sampleNum
         LAB_shape = (self.L_sampleNum, self.a_sampleNum, self.b_sampleNum)
         # comparison only happened  between samples in 2 x compareRange
         # LAB[targetL - L_compareIndexRange : targetL + L_compareIndexRange, ..a.., ..b..]
-        self.L_compareRange = 51
-        self.a_compareRange = self.b_compareRange = 51
+        self.L_compareRange = 30
+        self.a_compareRange = self.b_compareRange = 30
         L_compareIndexRange = int(self.L_compareRange * self.L_sampleNum / 100)
         a_compareIndexRange = int(self.a_compareRange * self.a_sampleNum / 255)
         b_compareIndexRange = int(self.b_compareRange * self.b_sampleNum / 255)
         # similar to compare_range, color transfer can only happened between samples in 2 x transferRange
-        self.L_transferRange = 25
-        self.a_transferRange = self.b_transferRange = 25
+        self.L_transferRange = 12
+        self.a_transferRange = self.b_transferRange = 12
         L_transferIndexRange = int(self.L_transferRange * self.L_sampleNum / 100)
         a_transferIndexRange = int(self.a_transferRange * self.a_sampleNum / 255)
         b_transferIndexRange = int(self.b_transferRange * self.b_sampleNum / 255)
@@ -82,7 +82,7 @@ class Palette:
 
 def create_save_palette():
     palette = Palette()
-    file_to_store = open("color_model.pkl", "wb")
+    file_to_store = open("src/color_model.pkl", "wb")
     pickle.dump(palette, file_to_store)
     file_to_store.close()
 

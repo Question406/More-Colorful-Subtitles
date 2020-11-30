@@ -13,7 +13,7 @@ from functools import reduce
 from ColorTuneAnalyzer import *
 
 LOSS_DECAY_RATIO = 0.8
-
+MAX_FRAME_SKIP = 48  # max frame skip to consider separate subtitle
 
 def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     print("working on ", nowSub)
@@ -78,8 +78,8 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, i
     return nowStatus
 
 
-def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer):
-    tune_num = 2
+def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_sub):
+    tune_num = 3
     hue_range = 0.05
     print("working on ", now_sub)
 
@@ -122,16 +122,34 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer):
         color_tune = color_analyzer.analyzeImage(frame)
         color_tune = standardLAB2standardLCH(color_tune[:tune_num])
         opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
+
+        # color_tune = standardLAB2standardLCH(color_tune[:max(tune_num, len(color_tune))])
+        # opposite_hue = np.hstack([color_tune, oppositeStandardLCH(color_tune)])[:, 2]
+
+        # color_tune = standardLAB2standardLCH(color_tune[:max(tune_num, len(color_tune))])
+        # opposite_hue = color_tune[:, 2]
+
         search_color_index = np.where(_is_in_search_space(hues=opposite_hue, hue_range=hue_range,
                                                           color_array=palette.standardLCH))[0]
         search_color_index = np.hstack([palette.center_point_index, search_color_index])
         # Init DP loss for the first frame
         if i == 0:
-            palette.DP_loss[search_color_index] = 0
+            if previous_sub is None or now_sub.start - previous_sub.end > MAX_FRAME_SKIP:
+                palette.DP_loss[:] = np.inf
+                palette.DP_loss[search_color_index] = 0
+            else:
+                # now_sub.start - previous_sub.end <= MAX_FRAME_SKIP
+                pass
 
-        sub_status["search_color_index"].append(search_color_index)
         boxes = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
         DP_previous_index, DP_loss = calculateLoss4(boxes=boxes, palette=palette, search_index=search_color_index)
+
+        # Update palette
+        palette.DP_previous_index[search_color_index] = DP_previous_index  # Can be abandoned, it's useless
+        palette.DP_loss[:] = np.inf  # Can be optimized using the previous search_index
+        palette.DP_loss[search_color_index] = DP_loss
+
+        sub_status["search_color_index"].append(search_color_index)
         sub_status["DP_previous_index"].append(DP_previous_index)
         sub_status["DP_loss"].append(DP_loss)
     return sub_status
@@ -163,6 +181,23 @@ def getPickedColor_2(sub_status, palette):
         tmp_index = np.where(sub_status["search_color_index"][-i] == last_color_index)[0][0]
         last_color_index = sub_status["DP_previous_index"][-i][tmp_index]
     return pickedColor[::-1]
+
+def DP_all_frames(status, subs, palette):
+    last_frame = np.inf
+    for now_sub in subs[::-1]:
+        sub_status = status[now_sub]
+        sub_status["DP_color"] = []
+
+        if last_frame - now_sub.end > MAX_FRAME_SKIP:
+            last_color_index = sub_status["search_color_index"][-1][np.argmin(sub_status["DP_loss"][-1])]
+        last_frame = now_sub.start
+
+        for i in range(1, sub_status["total_frame"] + 1):
+            sub_status["DP_color"].append(palette.standardRGB[last_color_index])
+            tmp_index = np.where(sub_status["search_color_index"][-i] == last_color_index)[0][0]
+            last_color_index = sub_status["DP_previous_index"][-i][tmp_index]
+        sub_status["DP_color"] = sub_status["DP_color"][::-1]
+
 
 
 def outputSingleSub(src, cap, nowSub, status, colors, k, font):
@@ -298,31 +333,32 @@ def newWork(*args):
     color_tune_analyzer = ColorTuneAnalyzer(frame_width=frame_width, frame_height=frame_height)
 
     status = {}
-
+    previous_sub = None
     for sub in subs:
         start = time.time()
-
         status[sub] = workOnSingleSub_2(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
-                                        color_analyzer=color_tune_analyzer)
-
-
+                                        color_analyzer=color_tune_analyzer, previous_sub=previous_sub)
+        previous_sub = sub
         print(sub, " : ", time.time() - start)
 
     # output
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
-    resultPath = '%s/%s-Subtitle-3d-fast-%s-decay.mp4' % (outputDir, src, colorWheel)
+    resultPath = '%s/Smooth-%s-3d-fast-%s-decay.mp4' % (outputDir, src, colorWheel)
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     # fourcc = cv.VideoWriter_fourcc(*"H264")
     videoWriter = cv.VideoWriter(resultPath, fourcc, fps, (frame_width, frame_height))
+
+    # DP
+    DP_all_frames(status=status, subs=subs, palette=my_palette)
 
     # add subtitle and output
     cap.set(1, 1)
     _, frame = cap.read()
     itr = iter(subs)
     nowSub = next(itr)
-    resColor = iter(getPickedColor_2(status[nowSub], my_palette))
+    resColor = iter(status[nowSub]["DP_color"])
     text = nowSub.text
 
     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
@@ -348,7 +384,7 @@ def newWork(*args):
             elif frame_id > nowSub.end:
                 try:
                     nowSub = next(itr)
-                    resColor = iter(getPickedColor_2(status[nowSub], my_palette))
+                    resColor = iter(status[nowSub]["DP_color"])
                     text = nowSub.text
                     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
                     draw = ImageDraw.Draw(im)

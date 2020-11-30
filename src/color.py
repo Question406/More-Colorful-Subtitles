@@ -167,6 +167,7 @@ def getBoxMean(boxs):
 
 def calculateLoss4(boxes, palette, search_index):
     transloss_beta = 0.1
+    transloss_gamma = 2
     boxes = getBoxMean(boxes)
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
     palette_standardLAB = palette.standardLAB[search_index]
@@ -175,16 +176,11 @@ def calculateLoss4(boxes, palette, search_index):
     min_distance_each_color = distance.min(axis=1)   # shape: (palette_color_num)
 
     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
-                              + transloss_beta * palette.nearby_deltaEs[search_index[:]]**2
+                              + transloss_beta * palette.nearby_deltaEs[search_index[:]]**transloss_gamma
                                 # shape: (palette_color_num x nearby_color_num)
     tmp_argmin = np.argmin(previous_color_loss_table, axis=1) # shape: (palette_color_num)
     DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
     DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] - min_distance_each_color
-
-    # Update palette
-    palette.DP_previous_index[search_index] = DP_previous_index # Can be abandoned, it's useless
-    palette.DP_loss[:] = np.inf # Can be optimized using the previous search_index
-    palette.DP_loss[search_index] = DP_loss
 
     return DP_previous_index, DP_loss
 
