@@ -12,8 +12,12 @@ from color_conversion import *
 from functools import reduce
 from ColorTuneAnalyzer import *
 
-LOSS_DECAY_RATIO = 0.8
-MAX_FRAME_SKIP = 48  # max frame skip to consider separate subtitle
+
+config = {}
+config["tune_num"] = 3
+config["hue_range"] = 0.05
+config["LOSS_DECAY_RATIO"] = 0.8
+config["MAX_FRAME_SKIP"] = 24
 
 def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
     print("working on ", nowSub)
@@ -64,7 +68,7 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, i
         nowStatus = [np.zeros(shape=(len(colors), 3))]
     else:
         nowStatus = initialStatus
-        nowStatus[:, 0] = nowStatus[:, 0] * (LOSS_DECAY_RATIO) ** (nowSub.start - lastSub.end)
+        nowStatus[:, 0] = nowStatus[:, 0] * (config["LOSS_DECAY_RATIO"]) ** (nowSub.start - lastSub.end)
         nowStatus = [nowStatus]
 
     # set to the start frame
@@ -79,13 +83,9 @@ def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, i
 
 
 def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_sub):
-    tune_num = 3
-    hue_range = 0.05
+    tune_num = config["tune_num"]
+    hue_range = config["hue_range"]
     print("working on ", now_sub)
-
-    # initialize palette
-    palette.DP_loss[:] = np.inf
-    palette.DP_previous_index[:] = np.nan
 
     # locate boxes
     cap.set(1, 0)
@@ -120,7 +120,10 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
     for i in range(sub_status["total_frame"]):
         ret, frame = cap.read()
         color_tune = color_analyzer.analyzeImage(frame)
-        color_tune = standardLAB2standardLCH(color_tune[:tune_num])
+        # color_tune = standardLAB2standardLCH(color_tune[:tune_num])
+        # opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
+
+        color_tune = standardLAB2standardLCH(color_tune[:])
         opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
 
         # color_tune = standardLAB2standardLCH(color_tune[:max(tune_num, len(color_tune))])
@@ -134,11 +137,11 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
         search_color_index = np.hstack([palette.center_point_index, search_color_index])
         # Init DP loss for the first frame
         if i == 0:
-            if previous_sub is None or now_sub.start - previous_sub.end > MAX_FRAME_SKIP:
+            if previous_sub is None or now_sub.start - previous_sub.end > config["MAX_FRAME_SKIP"]:
                 palette.DP_loss[:] = np.inf
                 palette.DP_loss[search_color_index] = 0
             else:
-                # now_sub.start - previous_sub.end <= MAX_FRAME_SKIP
+                # now_sub.start - previous_sub.end <= config["MAX_FRAME_SKIP"]
                 pass
 
         boxes = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
@@ -188,7 +191,7 @@ def DP_all_frames(status, subs, palette):
         sub_status = status[now_sub]
         sub_status["DP_color"] = []
 
-        if last_frame - now_sub.end > MAX_FRAME_SKIP:
+        if last_frame - now_sub.end > config["MAX_FRAME_SKIP"]:
             last_color_index = sub_status["search_color_index"][-1][np.argmin(sub_status["DP_loss"][-1])]
         last_frame = now_sub.start
 
@@ -700,6 +703,7 @@ def tempTry(*args):
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, '3d')
+# funcTime(newWork, 'rawColors.mp4', 2, 24, '3d')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'RdBu')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'seismic')

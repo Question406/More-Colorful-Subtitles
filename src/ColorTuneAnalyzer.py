@@ -6,6 +6,9 @@ from sklearn.cluster import KMeans
 from cv2 import cv2 as cv
 from color_conversion import *
 
+from sklearn.utils.testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
+
 
 class ColorTuneAnalyzer:
     def __init__(self, frame_width, frame_height, sample_num=100, n_cluser=5):
@@ -16,6 +19,7 @@ class ColorTuneAnalyzer:
         self.sample_x_indices = np.random.randint(0, frame_width, size=sample_num)
         self.sample_y_indices = np.random.randint(0, frame_height, size=sample_num)
 
+    @ignore_warnings(category=ConvergenceWarning)
     def analyzeImage(self, img):
         """
         :param img:
