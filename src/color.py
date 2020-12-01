@@ -85,35 +85,6 @@ def d_textRegion2textColor2(bboxs, textColor):
     return d[t], t
 
 
-def showColorBar(bar_kind, num):
-    """
-    :param bar_kind: color tone to choose
-    :param num: the number of colors you pick from this color tone
-    """
-    cmap = plt.get_cmap(bar_kind)
-    gradient = np.linspace(0, 1, num)
-    gradient = np.vstack((gradient, gradient))  # convert to 2-dimension
-    fig, ax = plt.subplots(nrows=1)
-    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
-    ax.set_title(bar_kind + ' colormaps', fontsize=14)
-    ax.imshow(gradient, aspect='auto', cmap=cmap)
-    ax.set_axis_off()
-    plt.show()
-
-
-def showColorBarWithArray(bar_array):
-    """
-    :param bar_array: color bar array ([R, G, B]) with scale (0, 255)
-    """
-    bar_array = bar_array.astype(int)
-    gradient = np.stack((bar_array, bar_array), axis=0)  # convert to 2-dimension
-    fig, ax = plt.subplots(nrows=1)
-    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
-    ax.set_title('colormaps', fontsize=14)
-    ax.imshow(gradient, aspect='auto')
-    ax.set_axis_off()
-    plt.show()
-
 
 def getColorBar(bar_kind, num):
     """
@@ -168,6 +139,7 @@ def getBoxMean(boxs):
 def calculateLoss4(boxes, palette, search_index):
     transloss_beta = 0.1
     transloss_gamma = 2
+    distance_gamma = 1
     boxes = getBoxMean(boxes)
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
     palette_standardLAB = palette.standardLAB[search_index]
@@ -180,7 +152,7 @@ def calculateLoss4(boxes, palette, search_index):
                                 # shape: (palette_color_num x nearby_color_num)
     tmp_argmin = np.argmin(previous_color_loss_table, axis=1) # shape: (palette_color_num)
     DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
-    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] - min_distance_each_color
+    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] - min_distance_each_color**distance_gamma
 
     return DP_previous_index, DP_loss
 
@@ -296,4 +268,60 @@ def findMaxDeltaEColor(labColor, iter=500):
         .astype(np.uint8)
     maxRGBColor = cv.cvtColor(maxOpencvLabColor, cv.COLOR_LAB2RGB).reshape((1, 1, 3))
     plt.imshow(maxRGBColor/255.0)
+    plt.show()
+
+
+def findMaxDeltaEColorInArray(color_array_a, color_b):
+    """
+    find the color in color_array_a with max deltaE w.r.t. color_b
+    :param color: shape (1) in standard LAB space
+    :param color_array: shape (N, 3) in standard LAB space
+    :return:
+    """
+    delta_E = colour.delta_E(color_array_a, color_b, method="CIE 2000")
+    index = np.argmax(delta_E)
+    max_color = color_array_a[index]
+    return index, max_color
+
+
+def showColorBar(bar_kind, num):
+    """
+    :param bar_kind: color tone to choose
+    :param num: the number of colors you pick from this color tone
+    """
+    cmap = plt.get_cmap(bar_kind)
+    gradient = np.linspace(0, 1, num)
+    gradient = np.vstack((gradient, gradient))  # convert to 2-dimension
+    fig, ax = plt.subplots(nrows=1)
+    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
+    ax.set_title(bar_kind + ' colormaps', fontsize=14)
+    ax.imshow(gradient, aspect='auto', cmap=cmap)
+    ax.set_axis_off()
+    plt.show()
+
+
+def showColorBarWithArray(bar_array):
+    """
+    :param bar_array: color bar array ([R, G, B]) with scale (0, 255)
+    """
+    bar_array = bar_array.astype(int)
+    gradient = np.stack((bar_array, bar_array), axis=0)  # convert to 2-dimension
+    fig, ax = plt.subplots(nrows=1)
+    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
+    ax.set_title('colormaps', fontsize=14)
+    ax.imshow(gradient, aspect='auto')
+    ax.set_axis_off()
+    plt.show()
+
+def showSingleColor(single_color):
+    """
+    :param bar_array: color bar array ([R, G, B]) with scale (0, 255)
+    """
+    bar_array = np.array([single_color], dtype=np.int)
+    gradient = np.stack((bar_array, bar_array), axis=0)  # convert to 2-dimension
+    fig, ax = plt.subplots(nrows=1)
+    fig.subplots_adjust(top=0.95, bottom=0.01, left=0.2, right=0.99)
+    ax.set_title('colormaps', fontsize=14)
+    ax.imshow(gradient, aspect='auto')
+    ax.set_axis_off()
     plt.show()

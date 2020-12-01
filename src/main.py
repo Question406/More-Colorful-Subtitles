@@ -11,6 +11,7 @@ from Palette import *
 from color_conversion import *
 from functools import reduce
 from ColorTuneAnalyzer import *
+from color import *
 
 
 config = {}
@@ -19,33 +20,6 @@ config["hue_range"] = 0.05
 config["LOSS_DECAY_RATIO"] = 0.8
 config["MAX_FRAME_SKIP"] = 24
 
-def workOnSingleSubEvery5Frame(cap, nowSub, font, colors, k):
-    print("working on ", nowSub)
-    # set to the first frame
-    cap.set(1, 0)
-    _, frame = cap.read()
-    text = nowSub.text
-    im = CV2ToPIL(frame)
-    draw = ImageDraw.Draw(im)
-    textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-
-    chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
-                          font=font)
-
-    nowStatus = [np.zeros(shape=(len(colors), 3))]
-
-    # set to the start frame
-    cap.set(1, nowSub.start)
-    # cnt = 0
-    for i in range(nowSub.end - nowSub.start):
-        ret, frame = cap.read()
-        boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
-        # frame = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
-        resStatus = calculateLoss2(frame, boxs, nowStatus[-1], colors, text, chboxs)
-        nowStatus.append(resStatus)
-    return nowStatus
 
 
 def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, initialStatus):
@@ -119,12 +93,12 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
     sub_status["total_frame"] = now_sub.end - now_sub.start + 1
     for i in range(sub_status["total_frame"]):
         ret, frame = cap.read()
-        color_tune = color_analyzer.analyzeImage(frame)
+        color_tune_standardLAB = color_analyzer.analyzeImage(frame)
         # color_tune = standardLAB2standardLCH(color_tune[:tune_num])
         # opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
 
-        color_tune = standardLAB2standardLCH(color_tune[:])
-        opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
+        color_tune_standardLCH = standardLAB2standardLCH(color_tune_standardLAB[:])
+        opposite_hue = oppositeStandardLCH(color_tune_standardLCH)[:, 2]
 
         # color_tune = standardLAB2standardLCH(color_tune[:max(tune_num, len(color_tune))])
         # opposite_hue = np.hstack([color_tune, oppositeStandardLCH(color_tune)])[:, 2]

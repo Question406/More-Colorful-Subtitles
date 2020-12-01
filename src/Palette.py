@@ -38,6 +38,10 @@ class Palette:
         standardLAB[:, :, :, 1] = a[None, :, None]
         standardLAB[:, :, :, 2] = b[None, None, :]
 
+        ###########################
+        standardLAB = standardLAB2visibleLAB(standardLAB)
+        ############################
+
         index_3_dimension = np.linspace(0, total_sampleNum - 1, total_sampleNum, dtype=np.int). \
             reshape((self.L_sampleNum, self.a_sampleNum, self.b_sampleNum))
         nearby_indexes = np.zeros(shape=(self.L_sampleNum, self.a_sampleNum, self.b_sampleNum, tranfer_totalNum),

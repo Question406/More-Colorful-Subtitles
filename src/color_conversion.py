@@ -1,5 +1,22 @@
 import numpy as np
+from cv2 import cv2 as cv
 
+def standardLAB2visibleLAB(x):
+    """
+    :param x: LAB color in standard form [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
+    :return: visible LAB color in standard form [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
+    """
+    y = standardLAB2RGB(x)
+    tmp_2d_shape = (1, -1, 3)
+    y = cv.cvtColor(y.reshape(tmp_2d_shape), cv.COLOR_RGB2LAB).reshape(y.shape)
+    y = opencvLAB2standardLAB(y)
+    return y
+
+def standardLAB2RGB(x):
+    y = standardLAB2opencvLAB(x)
+    tmp_2d_shape = (1, -1, 3)
+    y = cv.cvtColor(y.reshape(tmp_2d_shape), cv.COLOR_LAB2RGB).reshape(y.shape)
+    return y
 
 def standardLCH2standardLAB(x):
     """
