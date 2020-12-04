@@ -85,7 +85,6 @@ def d_textRegion2textColor2(bboxs, textColor):
     return d[t], t
 
 
-
 def getColorBar(bar_kind, num):
     """
     :param bar_kind: the color tone to choose
@@ -136,9 +135,11 @@ def getBoxMean(boxs):
     bboxs = np.stack([box.reshape(-1, 3).mean(axis=0) for box in boxs]).astype(np.float32)
     return bboxs
 
-def calculateLoss4(boxes, palette, search_index, log_statistics):
-    transloss_beta = 0.02
+
+def calculateLoss4(boxes, palette, log_statistics, search_index, key_frame, frame_mean_delta):
+    transloss_beta = 0.08
     transloss_gamma = 2
+    transloss_theta = 0.1
     distance_gamma = 1
     distance_standard = 60
     tolerance_index = 2
@@ -151,17 +152,26 @@ def calculateLoss4(boxes, palette, search_index, log_statistics):
     # relative_L[relative_L < 1] = 1/relative_L[relative_L < 1]
     # distance *= relative_L
     # min_distance_each_color = distance.min(axis=1)   # shape: (palette_color_num)
-    min_distance_each_color = np.partition(distance, kth=tolerance_index, axis=1)[:, tolerance_index]   # shape: (palette_color_num)
+    min_distance_each_color = np.partition(distance, kth=tolerance_index, axis=1)[:,
+                              tolerance_index]  # shape: (palette_color_num)
 
-    previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
-                              + transloss_beta * palette.nearby_deltaEs[search_index[:]]**transloss_gamma
-                                # shape: (palette_color_num x nearby_color_num)
-    tmp_argmin = np.argmin(previous_color_loss_table, axis=1) # shape: (palette_color_num)
-    DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
+    # if key_frame:
+    #     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]]
+    # else:
+    #     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
+    #                                 + transloss_beta * palette.nearby_deltaEs[search_index[:]] ** transloss_gamma
+    #     # shape: (palette_color_num x nearby_color_num)
+
+    transloss = transloss_beta * np.exp(-transloss_theta * frame_mean_delta) \
+                * palette.nearby_deltaEs[search_index[:]] ** transloss_gamma
+    previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] + transloss
+
+    tmp_argmin = np.argmin(previous_color_loss_table, axis=1)  # shape: (palette_color_num)
+    DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin]  # shape: (palette_color_num)
 
     distance_loss = min_distance_each_color - distance_standard
     distance_loss[distance_loss > 0] = 0
-    distance_loss = np.abs(distance_loss)**distance_gamma
+    distance_loss = np.abs(distance_loss) ** distance_gamma
     DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] + distance_loss
     #
     # distance_loss = -min_distance_each_color
@@ -173,14 +183,12 @@ def calculateLoss4(boxes, palette, search_index, log_statistics):
     return DP_previous_index, DP_loss
 
 
-
-
 def calculateLoss3(frame, boxes, lastStatus, colors, text, chboxs, transLoss, indexes):
     epsilon = 20
     resStatus = np.empty(shape=(len(colors), 3), dtype='object')
     boxes = getBoxMean(boxes)
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
-    palette_standardLAB = opencvLAB2standardLAB(colors)    # shape: (256 x 3)
+    palette_standardLAB = opencvLAB2standardLAB(colors)  # shape: (256 x 3)
     distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
                               method='CIE 2000')  # shape: (256 x box_num)
     min_distance_per_color = distance.min(axis=1)
@@ -254,6 +262,7 @@ def calculateLoss(image, frame, lastStatus, colors, text, anchor, font=getFont('
 
     return resStatus
 
+
 def findMaxDeltaEColor(labColor, iter=500):
     """
     :param labColor: lab color in standard range [(0 ~ 100), (-128 ~ 127), (-128 ~ 127)]
@@ -277,13 +286,13 @@ def findMaxDeltaEColor(labColor, iter=500):
     assert maxL is not None
     assert maxa is not None
     assert maxb is not None
-    maxStandardLabColor = np.array([L,a,b])
+    maxStandardLabColor = np.array([L, a, b])
     print("color with maximum delta E found : {}".format(maxDelta_E))
     print(maxStandardLabColor)
-    maxOpencvLabColor = standardLAB2opencvLAB(maxStandardLabColor)[np.newaxis, np.newaxis, :]\
+    maxOpencvLabColor = standardLAB2opencvLAB(maxStandardLabColor)[np.newaxis, np.newaxis, :] \
         .astype(np.uint8)
     maxRGBColor = cv.cvtColor(maxOpencvLabColor, cv.COLOR_LAB2RGB).reshape((1, 1, 3))
-    plt.imshow(maxRGBColor/255.0)
+    plt.imshow(maxRGBColor / 255.0)
     plt.show()
 
 
@@ -328,6 +337,7 @@ def showColorBarWithArray(bar_array):
     ax.imshow(gradient, aspect='auto')
     ax.set_axis_off()
     plt.show()
+
 
 def showSingleColor(single_color):
     """

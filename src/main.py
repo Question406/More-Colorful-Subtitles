@@ -94,7 +94,7 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
     sub_status["total_frame"] = now_sub.end - now_sub.start + 1
     for i in range(sub_status["total_frame"]):
         ret, frame_image = cap.read()
-        color_tune_standardLAB = color_analyzer.analyzeImage(frame_image)
+        color_tune_standardLAB, key_frame, frame_mean_delta = color_analyzer.analyzeImage(frame_image)
         # color_tune = standardLAB2standardLCH(color_tune[:tune_num])
         # opposite_hue = oppositeStandardLCH(color_tune)[:, 2]
 
@@ -121,7 +121,8 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
 
         boxes = [cv.cvtColor(frame_image[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
         DP_previous_index, DP_loss = calculateLoss4(boxes=boxes, palette=palette, log_statistics=log_statistics,
-                                                    search_index=search_color_index)
+                                                    search_index=search_color_index, key_frame=key_frame,
+                                                    frame_mean_delta=frame_mean_delta)
 
         # Update palette
         palette.DP_previous_index[search_color_index] = DP_previous_index  # Can be abandoned, it's useless
@@ -134,6 +135,7 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
         sub_status["max_min_distance_color"].append(standardLAB2RGB(log_statistics["max_min_distance_color"][-1]))
 
         log_statistics["frame"].append(i + now_sub.start)
+        # print("frame: {}".format(log_statistics["frame"][-1]))
     return sub_status
 
 
@@ -287,7 +289,7 @@ def newWork(*args):
     fontSize = int(args[2])
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
-    file_name = "distancestandard-60_translossbeta-0.02_DPcolor_tolerance-3-" + src
+    file_name = "FixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.08_DPcolor_tolerance-3-" + src
 
     # Record statistics
     log_statistics = {}
@@ -358,14 +360,14 @@ def newWork(*args):
             frame_id += 1
             if frame_id % 100 == 0:
                 print("hello ", frame_id // 100)
-            if frame_id >= nowSub.start and frame_id <= nowSub.end:
+            if frame_id >= nowSub.start and frame_id < nowSub.end:
                 # RGB
                 im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
                 draw = ImageDraw.Draw(im)
                 drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
                              next(resColor))
                 frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
-            elif frame_id > nowSub.end:
+            elif frame_id >= nowSub.end:
                 try:
                     nowSub = next(itr)
                     resColor = iter(status[nowSub]["DP_color"])

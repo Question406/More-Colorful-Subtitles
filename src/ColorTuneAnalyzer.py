@@ -19,23 +19,40 @@ class ColorTuneAnalyzer:
         np.random.seed(random_seed)
         self.sample_x_indices = np.random.randint(0, frame_width, size=sample_num)
         self.sample_y_indices = np.random.randint(0, frame_height, size=sample_num)
+        self.last_image_centroids = None
+        self.last_image_sample_mean_color = None
+        self.key_frame = False
+        self.frame_mean_delta = 0
 
     @ignore_warnings(category=ConvergenceWarning)
+    @ignore_warnings(category=RuntimeWarning)
     def analyzeImage(self, img):
         """
         :param img:
         :return centroids: the cluster point in standard LAB space after ordering
         """
-        clt = KMeans(n_clusters=self.n_cluster, random_state=1111)
+        mean_delta_threshold = 20
         # Choose which color space to cluster is essential, here we choose LAB space
         sample_color = cv.cvtColor(img[None, self.sample_y_indices, self.sample_x_indices, :],
                                    cv.COLOR_BGR2LAB).squeeze()
+
+        sample_mean_color = sample_color.mean(axis=0)
+        if not self.last_image_sample_mean_color is None:
+            self.frame_mean_delta = np.linalg.norm(sample_mean_color - self.last_image_sample_mean_color, ord=2)
+            self.key_frame = (self.frame_mean_delta > mean_delta_threshold)
+            # print(mean_delta)
+        self.last_image_sample_mean_color = sample_mean_color
+
+        if (self.last_image_centroids is None) or self.key_frame:
+            clt = KMeans(n_clusters=self.n_cluster, random_state=1111)
+        else:
+            clt = KMeans(n_clusters=self.n_cluster, init=self.last_image_centroids, random_state=1111)
         clt.fit(sample_color)
-        centroids = clt.cluster_centers_
+        self.last_image_centroids = centroids = clt.cluster_centers_
         numLabels = np.arange(0, len(np.unique(clt.labels_)) + 1)
         (centroids_percent, _) = np.histogram(clt.labels_, bins=numLabels)
         order_index = np.argsort(centroids_percent)[::-1]   # from main tune to minor tune
-        return opencvLAB2standardLAB(centroids[order_index])
+        return opencvLAB2standardLAB(centroids[order_index]), self.key_frame, self.frame_mean_delta
 
 
 def analysisVideoColorTune(cap, sample_num=500, n_cluster=5):
