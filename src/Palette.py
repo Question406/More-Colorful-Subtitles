@@ -13,14 +13,14 @@ class Palette:
         LAB_shape = (self.L_sampleNum, self.a_sampleNum, self.b_sampleNum)
         # comparison only happened  between samples in 2 x compareRange
         # LAB[targetL - L_compareIndexRange : targetL + L_compareIndexRange, ..a.., ..b..]
-        self.L_compareRange = 30
-        self.a_compareRange = self.b_compareRange = 30
+        self.L_compareRange = 42
+        self.a_compareRange = self.b_compareRange = 42
         L_compareIndexRange = int(self.L_compareRange * self.L_sampleNum / 100)
         a_compareIndexRange = int(self.a_compareRange * self.a_sampleNum / 255)
         b_compareIndexRange = int(self.b_compareRange * self.b_sampleNum / 255)
         # similar to compare_range, color transfer can only happened between samples in 2 x transferRange
-        self.L_transferRange = 12
-        self.a_transferRange = self.b_transferRange = 12
+        self.L_transferRange = 20
+        self.a_transferRange = self.b_transferRange = 20
         L_transferIndexRange = int(self.L_transferRange * self.L_sampleNum / 100)
         a_transferIndexRange = int(self.a_transferRange * self.a_sampleNum / 255)
         b_transferIndexRange = int(self.b_transferRange * self.b_sampleNum / 255)

@@ -11,11 +11,12 @@ from sklearn.exceptions import ConvergenceWarning
 
 
 class ColorTuneAnalyzer:
-    def __init__(self, frame_width, frame_height, sample_num=100, n_cluser=5):
+    def __init__(self, frame_width, frame_height, sample_num=100, n_cluser=5, random_seed=1111):
         self.sampleNum = sample_num
         self.n_cluster = n_cluser
         self.frame_width = frame_width
         self.frame_height = frame_height
+        np.random.seed(random_seed)
         self.sample_x_indices = np.random.randint(0, frame_width, size=sample_num)
         self.sample_y_indices = np.random.randint(0, frame_height, size=sample_num)
 
@@ -25,7 +26,7 @@ class ColorTuneAnalyzer:
         :param img:
         :return centroids: the cluster point in standard LAB space after ordering
         """
-        clt = KMeans(n_clusters=self.n_cluster)
+        clt = KMeans(n_clusters=self.n_cluster, random_state=1111)
         # Choose which color space to cluster is essential, here we choose LAB space
         sample_color = cv.cvtColor(img[None, self.sample_y_indices, self.sample_x_indices, :],
                                    cv.COLOR_BGR2LAB).squeeze()

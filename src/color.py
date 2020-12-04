@@ -136,23 +136,39 @@ def getBoxMean(boxs):
     bboxs = np.stack([box.reshape(-1, 3).mean(axis=0) for box in boxs]).astype(np.float32)
     return bboxs
 
-def calculateLoss4(boxes, palette, search_index):
-    transloss_beta = 0.1
+def calculateLoss4(boxes, palette, search_index, log_statistics):
+    transloss_beta = 0.02
     transloss_gamma = 2
     distance_gamma = 1
+    distance_standard = 60
+    tolerance_index = 2
     boxes = getBoxMean(boxes)
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
     palette_standardLAB = palette.standardLAB[search_index]
     distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
                               method='CIE 2000')  # shape: (palette_color_num x box_num)
-    min_distance_each_color = distance.min(axis=1)   # shape: (palette_color_num)
+    # relative_L = (palette_standardLAB[:, None, 0] + 5) / (boxes_standardLAB[None, :, 0]+5)
+    # relative_L[relative_L < 1] = 1/relative_L[relative_L < 1]
+    # distance *= relative_L
+    # min_distance_each_color = distance.min(axis=1)   # shape: (palette_color_num)
+    min_distance_each_color = np.partition(distance, kth=tolerance_index, axis=1)[:, tolerance_index]   # shape: (palette_color_num)
 
     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
                               + transloss_beta * palette.nearby_deltaEs[search_index[:]]**transloss_gamma
                                 # shape: (palette_color_num x nearby_color_num)
     tmp_argmin = np.argmin(previous_color_loss_table, axis=1) # shape: (palette_color_num)
     DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
-    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] - min_distance_each_color**distance_gamma
+
+    distance_loss = min_distance_each_color - distance_standard
+    distance_loss[distance_loss > 0] = 0
+    distance_loss = np.abs(distance_loss)**distance_gamma
+    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] + distance_loss
+    #
+    # distance_loss = -min_distance_each_color
+    # DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] + distance_loss
+
+    log_statistics["max_min_distance"].append(min_distance_each_color.max())
+    log_statistics["max_min_distance_color"].append(palette_standardLAB[np.argmax(min_distance_each_color)])
 
     return DP_previous_index, DP_loss
 
