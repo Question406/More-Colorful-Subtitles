@@ -25,7 +25,7 @@ config["MAX_FRAME_SKIP"] = 24
 def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, initialStatus):
     print("working on ", nowSub)
     # set to the first frame
-    cap.set(1, 0)
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
     _, frame = cap.read()
     text = nowSub.text
     im = CV2ToPIL(frame)
@@ -62,7 +62,7 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
     print("working on ", now_sub)
 
     # locate boxes
-    cap.set(1, 0)
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
     _, frame_image = cap.read()
     text = now_sub.text
     im = CV2ToPIL(frame_image)
@@ -85,13 +85,13 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
                       [_is_in_single_search_space(hue, hue_range, color_array) for hue in hues])
 
     # set to the start frame
-    cap.set(1, now_sub.start)
+    cap.set(cv.CAP_PROP_POS_FRAMES, now_sub.start)
     sub_status = {}
     sub_status["search_color_index"] = []
     sub_status["DP_previous_index"] = []
     sub_status["DP_loss"] = []
     sub_status["max_min_distance_color"] = []
-    sub_status["total_frame"] = now_sub.end - now_sub.start + 1
+    sub_status["total_frame"] = now_sub.end - now_sub.start
     for i in range(sub_status["total_frame"]):
         ret, frame_image = cap.read()
         color_tune_standardLAB, key_frame, frame_mean_delta = color_analyzer.analyzeImage(frame_image)
@@ -200,7 +200,7 @@ def findChange(cap, src, font, k):
     def getMean(b, g, r):
         return np.array([np.mean(b), np.mean(g), np.mean(r)])
 
-    cap.set(1, 0)
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
@@ -289,7 +289,7 @@ def newWork(*args):
     fontSize = int(args[2])
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
-    file_name = "FixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.08_DPcolor_tolerance-3-" + src
+    file_name = "TmpFixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.08_DPcolor_tolerance-3-" + src
 
     # Record statistics
     log_statistics = {}
@@ -339,10 +339,10 @@ def newWork(*args):
     DP_all_frames(status=status, subs=subs, palette=my_palette, log_statistics=log_statistics)
 
     # add subtitle and output
-    cap.set(1, 1)
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
     _, frame = cap.read()
     itr = iter(subs)
-    nowSub = next(itr)
+    nowSub = next(itr, None)
     resColor = iter(status[nowSub]["DP_color"])
     # resColor = iter(status[nowSub]["max_min_distance_color"])
     text = nowSub.text
@@ -351,35 +351,37 @@ def newWork(*args):
     draw = ImageDraw.Draw(im)
     textWidth, textHeight = getTextInfoPIL(draw, text, font)
 
-    cap.set(1, 1)
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
 
     frame_id = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if ret:
-            frame_id += 1
             if frame_id % 100 == 0:
                 print("hello ", frame_id // 100)
-            if frame_id >= nowSub.start and frame_id < nowSub.end:
-                # RGB
-                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                draw = ImageDraw.Draw(im)
-                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
-                             next(resColor))
-                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
-            elif frame_id >= nowSub.end:
-                try:
-                    nowSub = next(itr)
+
+            if nowSub is not None:
+                if frame_id >= nowSub.start and frame_id < nowSub.end:
+                    # RGB
+                    im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                    draw = ImageDraw.Draw(im)
+                    drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                                 next(resColor))
+                    frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
+
+            videoWriter.write(frame)
+
+            frame_id += 1
+            # change to next subtitle
+            if (nowSub is not None) and (frame_id >= nowSub.end):
+                nowSub = next(itr, None)
+                if nowSub is not None:
                     resColor = iter(status[nowSub]["DP_color"])
                     # resColor = iter(status[nowSub]["max_min_distance_color"])
                     text = nowSub.text
                     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
                     draw = ImageDraw.Draw(im)
                     textWidth, textHeight = getTextInfoPIL(draw, text, font)
-                except StopIteration:
-                    nowSub.start = nowSub.end = int(cap.get(cv.CAP_PROP_FRAME_COUNT)) + 1
-
-            videoWriter.write(frame)
         else:
             videoWriter.release()
             break
