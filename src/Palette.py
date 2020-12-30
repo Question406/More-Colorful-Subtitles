@@ -63,7 +63,7 @@ class Palette:
                                           min(b + b_compareIndexRange, self.b_sampleNum)
                     nearby_index = index_3_dimension[L_min: L_max, a_min: a_max, b_min: b_max].reshape(-1)
                     nearby_color = standardLAB[L_min: L_max, a_min: a_max, b_min: b_max].reshape(-1, 3)
-                    nearby_deltaE = colour.delta_E(standardLAB[L, a, b], nearby_color)
+                    nearby_deltaE = colour.delta_E(standardLAB[L, a, b], nearby_color, method="CIE 1976")
                     order = np.argsort(nearby_deltaE)
                     nearby_indexes[L, a, b, :tranfer_totalNum] = nearby_index[order][:tranfer_totalNum]
                     # nearby_colors[L, a, b, :tranfer_totalNum] = nearby_color[order][:tranfer_totalNum, :]

@@ -3,7 +3,7 @@ import time
 
 from PIL import Image, ImageDraw
 
-from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss2, calculateLoss3, calculateLoss4
+from color import calculateLoss, getColorBar, showColorBar, getChBoxs, calculateLoss
 from subtitle import drawSubtitle, processSRT
 from utils import (CV2ToPIL, getTextInfoPIL, funcTime, getFont)
 
@@ -13,51 +13,23 @@ from functools import reduce
 from ColorTuneAnalyzer import *
 from color import *
 
-
-config = {}
-config["tune_num"] = 3
-config["hue_range"] = 0.05
-config["LOSS_DECAY_RATIO"] = 0.8
-config["MAX_FRAME_SKIP"] = 24
+import json
 
 
-
-def workOnSingleSub(cap, nowSub, font, colors, transLoss, indexes, k, lastSub, initialStatus):
-    print("working on ", nowSub)
-    # set to the first frame
-    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
-    _, frame = cap.read()
-    text = nowSub.text
-    im = CV2ToPIL(frame)
-    draw = ImageDraw.Draw(im)
-    textWidth, textHeight = getTextInfoPIL(draw, text, font=font)
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-
-    chboxs, _ = getChBoxs(draw, text, anchor=(frame_width // 2 - textWidth // 2, frame_height - k * textHeight),
-                          font=font)
-
-    # nowStatus = [np.zeros(shape=(len(colors), 3))]
-    if initialStatus is None:
-        nowStatus = [np.zeros(shape=(len(colors), 3))]
-    else:
-        nowStatus = initialStatus
-        nowStatus[:, 0] = nowStatus[:, 0] * (config["LOSS_DECAY_RATIO"]) ** (nowSub.start - lastSub.end)
-        nowStatus = [nowStatus]
-
-    # set to the start frame
-    cap.set(1, nowSub.start)
-    # cnt = 0
-    for i in range(nowSub.end - nowSub.start):
-        ret, frame = cap.read()
-        boxs = [cv.cvtColor(frame[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
-        resStatus = calculateLoss3(frame, boxs, nowStatus[-1], colors, text, chboxs, transLoss, indexes)
-        nowStatus.append(resStatus)
-    return nowStatus
+config = {
+    "tune_num": 5,            # Chosen tune num
+    "hue_range": 0.05,        # Search space range in opposite color tune
+    "MAX_FRAME_SKIP": 24,
+    "transloss_beta": 0.2,
+    "transloss_gamma": 2,
+    "transloss_theta": 0.1,
+    "distance_gamma": 1,
+    "distance_standard": 60,
+    "tolerance_index": 2,
+}
 
 
-def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_sub, log_statistics):
-    tune_num = config["tune_num"]
+def workOnSingleSub(cap, now_sub, palette, font, k, color_analyzer, previous_sub, log_statistics):
     hue_range = config["hue_range"]
     print("working on ", now_sub)
 
@@ -120,19 +92,18 @@ def workOnSingleSub_2(cap, now_sub, palette, font, k, color_analyzer, previous_s
                 pass
 
         boxes = [cv.cvtColor(frame_image[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
-        DP_previous_index, DP_loss = calculateLoss4(boxes=boxes, palette=palette, log_statistics=log_statistics,
-                                                    search_index=search_color_index, key_frame=key_frame,
-                                                    frame_mean_delta=frame_mean_delta)
-
-        # Update palette
-        palette.DP_previous_index[search_color_index] = DP_previous_index  # Can be abandoned, it's useless
-        palette.DP_loss[:] = np.inf  # Can be optimized using the previous search_index
-        palette.DP_loss[search_color_index] = DP_loss
+        DP_previous_index, DP_loss = calculateLoss(boxes=boxes, palette=palette, log_statistics=log_statistics,
+                                                   search_index=search_color_index, key_frame=key_frame,
+                                                   frame_mean_delta=frame_mean_delta, config=config)
 
         sub_status["search_color_index"].append(search_color_index)
         sub_status["DP_previous_index"].append(DP_previous_index)
         sub_status["DP_loss"].append(DP_loss)
         sub_status["max_min_distance_color"].append(standardLAB2RGB(log_statistics["max_min_distance_color"][-1]))
+
+        # Update palette
+        palette.DP_loss[:] = np.inf  # Can be optimized using the previous search_index
+        palette.DP_loss[search_color_index] = DP_loss
 
         log_statistics["frame"].append(i + now_sub.start)
         # print("frame: {}".format(log_statistics["frame"][-1]))
@@ -196,75 +167,6 @@ def DP_all_frames(status, subs, palette, log_statistics):
 
 
 
-def findChange(cap, src, font, k):
-    def getMean(b, g, r):
-        return np.array([np.mean(b), np.mean(g), np.mean(r)])
-
-    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
-    outputDir = './videoOutput/%s' % src
-    if not os.path.exists(outputDir):
-        os.mkdir(outputDir)
-    resultPath = '%s/%s-Subtitle-newwork-change.mp4' % (outputDir, src)
-    if os.path.exists(resultPath):
-        return
-    print("find Change begin!")
-    fourcc = cv.VideoWriter_fourcc(*"mp4v")
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-    videoWriter = cv.VideoWriter(resultPath, fourcc, cap.get(cv.CAP_PROP_FPS), (frame_width, frame_height))
-    lastFrame = None
-    lastMean = None
-
-    text = "Big Change"
-    fpsAll = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-    fps = int(cap.get(cv.CAP_PROP_FPS))
-    last = 0
-    frame_id = 0
-    # flag = False
-    while (cap.isOpened()):
-        ret, frame = cap.read()
-        if lastFrame is None:
-            lastFrame = frame
-            (b, g, r) = cv.split(frame)
-            lastMean = getMean(b, g, r)
-            continue
-        if ret:
-            frame_id += 1
-            (b, g, r) = cv.split(frame)
-            nowMean = getMean(b, g, r)
-            dis = np.sqrt(np.sum((nowMean - lastMean) ** 2))
-            # print(dis)
-            if dis > 10 or last != 0:
-                if last == 0:
-                    last = fps
-                else:
-                    last -= 1
-
-                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                text = '%s Big Change' % str(frame_id)
-                draw = ImageDraw.Draw(im)
-                textWidth, textHeight = getTextInfoPIL(draw, text, font)
-                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
-                             (255, 255, 255))
-
-                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
-            else:
-                im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                text = '%s normal' % str(frame_id)
-                draw = ImageDraw.Draw(im)
-                textWidth, textHeight = getTextInfoPIL(draw, text, font)
-                drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
-                             (120, 255, 255))
-                frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
-
-            lastFrame = frame
-            lastMean = nowMean
-            videoWriter.write(frame)
-        else:
-            videoWriter.release()
-            break
-    print("Find Change Done! ")
-
 def outputLog(log_statistics, file_path):
     with open(file_path, "w") as f:
         f.write("frame" + ",")
@@ -282,6 +184,7 @@ def outputLog(log_statistics, file_path):
             f.write("\n")
 
 
+
 def newWork(*args):
     srcName = args[0]
     k = int(args[1])
@@ -289,7 +192,10 @@ def newWork(*args):
     fontSize = int(args[2])
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
-    file_name = "TmpFixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.08_DPcolor_tolerance-3-" + src
+    file_name = json.dumps(config) + src
+    # file_name = "CIE1976-KeyFrameArbitraryColor-FixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.2_DPcolor_tolerance-3-" + src
+    # file_name = "white-" + src
+    # file_name = "black-" + src
 
     # Record statistics
     log_statistics = {}
@@ -314,15 +220,17 @@ def newWork(*args):
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
     my_palette = load_palette()
-    color_tune_analyzer = ColorTuneAnalyzer(frame_width=frame_width, frame_height=frame_height)
+    color_tune_analyzer = ColorTuneAnalyzer(frame_width=frame_width,
+                                            frame_height=frame_height,
+                                            n_cluser=config["tune_num"])
 
     status = {}
     previous_sub = None
     for sub in subs:
         start = time.time()
-        status[sub] = workOnSingleSub_2(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
-                                        color_analyzer=color_tune_analyzer, previous_sub=previous_sub,
-                                        log_statistics=log_statistics)
+        status[sub] = workOnSingleSub(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
+                                      color_analyzer=color_tune_analyzer, previous_sub=previous_sub,
+                                      log_statistics=log_statistics)
         previous_sub = sub
         print(sub, " : ", time.time() - start)
 
@@ -367,6 +275,8 @@ def newWork(*args):
                     draw = ImageDraw.Draw(im)
                     drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
                                  next(resColor))
+                    # drawSubtitle(draw, text, (frame_width // 2 - textWidth // 2, frame_height - k * textHeight), font,
+                    #              [0, 0, 0])
                     frame = cv.cvtColor(np.asarray(im), cv.COLOR_RGB2BGR)
 
             videoWriter.write(frame)
@@ -396,7 +306,8 @@ def newWork(*args):
 # funcTime(newWork, 'rawColors.mp4', 3, 40)
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, '3d')
+# funcTime(newWork, 'TimeLapseSwiss.mp4', 6, 50, '3d')
+funcTime(newWork, 'YourName.mkv', 2, 40, '3d')
 # funcTime(newWork, 'rawColors.mp4', 2, 24, '3d')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 2, 24, 'RdBu')

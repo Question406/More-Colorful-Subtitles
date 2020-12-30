@@ -136,13 +136,13 @@ def getBoxMean(boxs):
     return bboxs
 
 
-def calculateLoss4(boxes, palette, log_statistics, search_index, key_frame, frame_mean_delta):
-    transloss_beta = 0.08
-    transloss_gamma = 2
-    transloss_theta = 0.1
-    distance_gamma = 1
-    distance_standard = 60
-    tolerance_index = 2
+def calculateLoss(boxes, palette, log_statistics, search_index, key_frame, frame_mean_delta, config):
+    transloss_beta = config["transloss_beta"]
+    transloss_gamma = config["transloss_gamma"]
+    transloss_theta = config["transloss_theta"]
+    distance_gamma = config["distance_gamma"]
+    distance_standard = config["distance_standard"]
+    tolerance_index = config["tolerance_index"]
     boxes = getBoxMean(boxes)
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
     palette_standardLAB = palette.standardLAB[search_index]
@@ -161,18 +161,34 @@ def calculateLoss4(boxes, palette, log_statistics, search_index, key_frame, fram
     #     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] \
     #                                 + transloss_beta * palette.nearby_deltaEs[search_index[:]] ** transloss_gamma
     #     # shape: (palette_color_num x nearby_color_num)
+    #
+    #     # if key_frame:
+    #     #     DP_previous_index = np.argmin(palette.DP_loss).repeat(len(search_index))
+    #     #     palette.DP_loss[:] = np.inf  # Can be optimized using the previous search_index
+    #     #     palette.DP_loss[search_index] = 0
+    #     #     previous_color_loss = 0
+    #     # else:
+    #     #     transloss = transloss_beta * np.exp(-transloss_theta * frame_mean_delta) \
+    #     #                 * palette.nearby_deltaEs[search_index[:]] ** transloss_gamma
+    #     #     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] + transloss
+    #     #     tmp_argmin = np.argmin(previous_color_loss_table, axis=1)  # shape: (palette_color_num)
+    #     #     DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin] # shape: (palette_color_num)
+    #     previous_color_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin]
 
+    # Calculate transfer Loss and previous DP index
     transloss = transloss_beta * np.exp(-transloss_theta * frame_mean_delta) \
                 * palette.nearby_deltaEs[search_index[:]] ** transloss_gamma
     previous_color_loss_table = palette.DP_loss[palette.nearby_indexes[search_index[:]]] + transloss
-
     tmp_argmin = np.argmin(previous_color_loss_table, axis=1)  # shape: (palette_color_num)
     DP_previous_index = palette.nearby_indexes[search_index, tmp_argmin]  # shape: (palette_color_num)
+    previous_color_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin]
 
+    # Calcualte distance loss
     distance_loss = min_distance_each_color - distance_standard
     distance_loss[distance_loss > 0] = 0
     distance_loss = np.abs(distance_loss) ** distance_gamma
-    DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] + distance_loss
+
+    DP_loss = previous_color_loss + distance_loss
     #
     # distance_loss = -min_distance_each_color
     # DP_loss = previous_color_loss_table[range(len(tmp_argmin)), tmp_argmin] + distance_loss
@@ -183,84 +199,6 @@ def calculateLoss4(boxes, palette, log_statistics, search_index, key_frame, fram
     return DP_previous_index, DP_loss
 
 
-def calculateLoss3(frame, boxes, lastStatus, colors, text, chboxs, transLoss, indexes):
-    epsilon = 20
-    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
-    boxes = getBoxMean(boxes)
-    boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
-    palette_standardLAB = opencvLAB2standardLAB(colors)  # shape: (256 x 3)
-    distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
-                              method='CIE 2000')  # shape: (256 x box_num)
-    min_distance_per_color = distance.min(axis=1)
-
-    # ind = indexs
-    for (i, status) in enumerate(resStatus):
-        ind = indexes[i]
-        # indexes = transLoss[:, i].argsort()[:epsilon]
-        temp = ind[int(np.argmax(lastStatus[ind, 0] - transLoss[ind, i] ** 2))]
-        # temp = int(np.argmax(lastStatus[:, 0] - transLoss[:, i] ** 2))
-        status[0] = lastStatus[int(temp)][0] + min_distance_per_color[i]
-        status[1] = int(temp)
-        status[2] = 0
-    return resStatus
-
-
-def calculateLoss2(frame, boxs, lastStatus, colors, text, chboxs, transLoss):
-    epsilon = 10
-    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
-    boxs = getBoxMean(boxs)
-
-    for (i, status) in enumerate(resStatus):
-        curColorLoss, charPos = d_textRegion2textColor(boxs, colors[i])
-        charPos = charPos
-        temp = max(i - epsilon, 0) + int(np.argmax(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0]))
-        # temp = max(i - epsilon, 0) + int(np.argmax(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0] + 100 * transLoss[max(i - epsilon, 0): min(len(colors), i + epsilon), i]))
-        # temp = max(i - epsilon, 0) + int(np.argmax(100 * transLoss[max(i - epsilon, 0): min(len(colors), i + epsilon), i]))
-        status[0] = lastStatus[int(temp)][0] + curColorLoss
-        # status[0] = lastStatus[int(temp)][0]
-        status[1] = int(temp)
-        status[2] = charPos
-
-    return resStatus
-
-
-def calculateLoss(image, frame, lastStatus, colors, text, anchor, font=getFont('Consolas', 32)):
-    epsilon = 10
-    # bounding box of entire text
-    #    bbox = image.textbbox(anchor, text, font)
-    # left upper bound of bounding box
-    lastl, u = anchor[0], anchor[1]
-
-    chboxs = []
-    s = ''
-    # for each character, find its bounding box
-    for ch in text:
-        s = s + ch
-        if ch == ' ':
-            continue
-        else:
-            box = image.textbbox((lastl, u), s, font=font)
-            chboxs.append(box)
-            lastl = box[2]
-            s = ''
-    boxs = [frame[chbox[1]: chbox[3], chbox[0]:chbox[2]] for chbox in chboxs]
-
-    resStatus = np.empty(shape=(len(colors), 3), dtype='object')
-
-    for (i, status) in enumerate(resStatus):
-        curColorLoss, charPos = d_textRegion2textColor(boxs, colors[i])
-        # charPos = text[charPos]
-        charPos = charPos
-        # colorLoss = 1e30
-        status[1] = max(i - epsilon, 0) + np.argmax(lastStatus[max(i - epsilon, 0): min(len(colors), i + epsilon), 0])
-        # status[1]  = np.argmin()
-        colorLoss = lastStatus[int(status[1])][0]
-        colorLoss += curColorLoss
-        # color loss
-        status[0] = colorLoss
-        status[2] = charPos
-
-    return resStatus
 
 
 def findMaxDeltaEColor(labColor, iter=500):
