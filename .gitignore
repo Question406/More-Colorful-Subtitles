@@ -140,7 +140,22 @@ cython_debug/
 # vscode
 .vscode/
 
+# .idea
+.idea/
 
 # video
 *.mp4
 *.flv
+
+# color model
+*.pkl
+
+# log data
+*.csv
+
+*.png
+*.jpg
+*.jpeg
+*.mkv
+*.gif
+*.rar

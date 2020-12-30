@@ -92,15 +92,15 @@ def visualizeColorClusters(image, k = 3):
 
 # load the image and convert it from BGR to RGB so that
 # we can dispaly it with matplotlib
-image_path = './videoSrc/test.png'
+image_path = '../videoSrc/test.png'
 image = cv2.imread(image_path)
 # BGR-->RGB cv to matplotlib show
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 # # show our image
-plt.figure()
-plt.axis("off")
-plt.imshow(image)
+# plt.figure()
+# plt.axis("off")
+# plt.imshow(image)
 
 # # reshape the image to be a list of pixels
 image = np.array(random.sample(list(image.reshape((-1, 3))), 500))
