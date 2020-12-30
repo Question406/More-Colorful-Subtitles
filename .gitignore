@@ -152,3 +152,9 @@ cython_debug/
 
 # log data
 *.csv
+
+*.png
+*.jpg
+*.jpeg
+*.mkv
+*.gif
