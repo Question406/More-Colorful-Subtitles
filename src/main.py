@@ -192,7 +192,8 @@ def newWork(*args):
     fontSize = int(args[2])
     videoSrc = './videoSrc/%s' % srcName
     srtSrc = './subtitle/srt/%s.srt' % src
-    file_name = json.dumps(config) + src
+    file_name = src + "_3000"
+    # file_name = json.dumps(config) + src
     # file_name = "CIE1976-KeyFrameArbitraryColor-FixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.2_DPcolor_tolerance-3-" + src
     # file_name = "white-" + src
     # file_name = "black-" + src
@@ -302,13 +303,19 @@ def newWork(*args):
 
 
 
+# def getClip():
+
+
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
 
-# funcTime(newWork, 'rawColors.mp4', 5, 30, 'RdBu')
-# funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
-# funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
+# funcTime(newWork, 'rawColors.mp4', 5, 30)
+# funcTime(newWork, 'NewZealand.mp4', 3, 34)
+# funcTime(newWork, 'BLACKPINK-How_You_Like_That.mp4', 5, 40)
+# funcTime(newWork, 'TWICE-What_Is_Love.mp4', 5, 40)
+funcTime(newWork, 'TokyoStreet.mp4', 5, 45)
+# funcTime(newWork, 'Spurs_highlights.mp4', 2.5, 28)
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 6, 50, '3d')
-funcTime(newWork, 'YourName.mkv', 2, 40, '3d')
+# funcTime(newWork, 'YourName.mkv', 2, 40, '3d')
 # funcTime(newWork, 'rawColors.mp4', 2, 24, '3d')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 6, 40, 'RdBu')

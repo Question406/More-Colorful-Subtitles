@@ -11,6 +11,7 @@ from color_conversion import *
 from utils import getFont
 
 
+deltaE_method = "CIE 2000"
 # from matplotlib import cm
 # from collections import OrderedDict
 
@@ -63,7 +64,7 @@ def d_textRegion2textColor(bboxs, textColor):
     l = len(bboxs)
     bboxs = [opencvLAB2standardLAB(box) for box in bboxs]
     p = opencvLAB2standardLAB(textColor)
-    d = colour.delta_E(bboxs, np.tile(p, (l, 1)), method='CIE 2000')
+    d = colour.delta_E(bboxs, np.tile(p, (l, 1)), method=deltaE_method)
     t = np.argsort(d)[0]
     return d[t], t
     # return d[np.argsort(d)[0]], np.argsort(d)[0]
@@ -124,7 +125,7 @@ def getChBoxs(image, text, anchor, font):
 def getTransLoss(colors):
     l = len(colors)
     tcolors = [opencvLAB2standardLAB(color) for color in colors]
-    temp = [colour.delta_E(tcolors, np.tile(color, (l, 1)), method='CIE 2000') for color in tcolors]
+    temp = [colour.delta_E(tcolors, np.tile(color, (l, 1)), method=deltaE_method) for color in tcolors]
     Temp = [t.argsort()[:30] for t in temp]
     res = np.stack(temp)
     res2 = np.stack(Temp)
@@ -147,7 +148,7 @@ def calculateLoss(boxes, palette, log_statistics, search_index, key_frame, frame
     boxes_standardLAB = opencvLAB2standardLAB(boxes)  # shape: (box_num x 3)
     palette_standardLAB = palette.standardLAB[search_index]
     distance = colour.delta_E(boxes_standardLAB[None, :, :], palette_standardLAB[:, None, :],
-                              method='CIE 2000')  # shape: (palette_color_num x box_num)
+                              method=deltaE_method)  # shape: (palette_color_num x box_num)
     # relative_L = (palette_standardLAB[:, None, 0] + 5) / (boxes_standardLAB[None, :, 0]+5)
     # relative_L[relative_L < 1] = 1/relative_L[relative_L < 1]
     # distance *= relative_L
@@ -215,7 +216,7 @@ def findMaxDeltaEColor(labColor, iter=500):
         L = np.random.randint(0, 100)
         a = np.random.randint(-128, 127)
         b = np.random.randint(-128, 127)
-        delta_E = colour.delta_E(labColor, [L, a, b], method="CIE 2000")
+        delta_E = colour.delta_E(labColor, [L, a, b], method=deltaE_method)
         if delta_E > maxDelta_E:
             maxDelta_E = delta_E
             maxL = L
@@ -241,7 +242,7 @@ def findMaxDeltaEColorInArray(color_array_a, color_b):
     :param color_array: shape (N, 3) in standard LAB space
     :return:
     """
-    delta_E = colour.delta_E(color_array_a, color_b, method="CIE 2000")
+    delta_E = colour.delta_E(color_array_a, color_b, method=deltaE_method)
     index = np.argmax(delta_E)
     max_color = color_array_a[index]
     return index, max_color
