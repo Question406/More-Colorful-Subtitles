@@ -29,7 +29,7 @@ config = {
 }
 
 
-def workOnSingleSub(cap, now_sub, palette, font, k, color_analyzer, previous_sub, log_statistics):
+def workOnSingleSub(cap, now_sub, palette, font, k, color_analyzer, previous_sub, log_statistics, subtitle_type):
     hue_range = config["hue_range"]
     print("working on ", now_sub)
 
@@ -90,8 +90,14 @@ def workOnSingleSub(cap, now_sub, palette, font, k, color_analyzer, previous_sub
             else:
                 # now_sub.start - previous_sub.end <= config["MAX_FRAME_SKIP"]
                 pass
-
-        boxes = [cv.cvtColor(frame_image[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
+        if subtitle_type == "adaptive":
+            boxes = [cv.cvtColor(frame_image[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
+        elif subtitle_type == "whole_background_level":
+            y_min, x_min = chboxs.min(axis=0)[[0, 2]]
+            y_max, x_max = chboxs.max(axis=0)[[1, 3]]
+            boxes = [cv.cvtColor(frame_image[y_min : y_max, x_min: x_max], cv.COLOR_BGR2LAB)]
+            if not config["tolerance_index"] == 0:
+                config["tolerance_index"] = 0
         DP_previous_index, DP_loss = calculateLoss(boxes=boxes, palette=palette, log_statistics=log_statistics,
                                                    search_index=search_color_index, key_frame=key_frame,
                                                    frame_mean_delta=frame_mean_delta, config=config)
@@ -141,7 +147,7 @@ def DP_all_frames(status, subs, palette, log_statistics):
     last_frame = np.inf
     for now_sub in subs[::-1]:
         sub_status = status[now_sub]
-        sub_status["DP_color"] = []
+        sub_status["chosen_color"] = []
 
         if last_frame - now_sub.end > config["MAX_FRAME_SKIP"]:
             last_color_index = sub_status["search_color_index"][-1][np.argmin(sub_status["DP_loss"][-1])]
@@ -149,7 +155,7 @@ def DP_all_frames(status, subs, palette, log_statistics):
 
         last_loss = None
         for i in range(1, sub_status["total_frame"] + 1):
-            sub_status["DP_color"].append(palette.standardRGB[last_color_index])
+            sub_status["chosen_color"].append(palette.standardRGB[last_color_index])
             log_statistics["chosen_color"].insert(0, palette.standardLAB[last_color_index])
             tmp_index = np.where(sub_status["search_color_index"][-i] == last_color_index)[0][0]
             next_last_color_index = sub_status["DP_previous_index"][-i][tmp_index]
@@ -163,7 +169,23 @@ def DP_all_frames(status, subs, palette, log_statistics):
             last_color_index = next_last_color_index
         log_statistics["frame_loss"].insert(0, last_loss)
 
-        sub_status["DP_color"] = sub_status["DP_color"][::-1]
+        sub_status["chosen_color"] = sub_status["chosen_color"][::-1]
+
+def simpleOppositeOnSingleSub(cap, now_sub, font, k):
+    cap.set(cv.CAP_PROP_POS_FRAMES, now_sub.start)
+    sub_status = {}
+    sub_status["chosen_color"] = []
+    total_frame = now_sub.end - now_sub.start
+    for i in range(total_frame):
+        ret, frame_image = cap.read()
+        frame_colors = cv.cvtColor(frame_image, cv.COLOR_BGR2RGB).reshape(-1, 3)
+        sample_mean_color = frame_colors.mean(axis=0)
+        sub_status["chosen_color"].append([int(255 - sample_mean_color[0]),
+                                           int(255 - sample_mean_color[1]),
+                                           int(255 - sample_mean_color[2])])
+    return sub_status
+
+
 
 
 
@@ -185,14 +207,19 @@ def outputLog(log_statistics, file_path):
 
 
 
-def newWork(*args):
-    srcName = args[0]
-    k = int(args[1])
-    src = srcName[:-4]
-    fontSize = int(args[2])
+def newWork(srcName, k, fontSize, subtitle_type):
     videoSrc = './videoSrc/%s' % srcName
+    src = srcName[:-4]
     srtSrc = './subtitle/srt/%s.srt' % src
-    file_name = json.dumps(config) + src
+    if subtitle_type == "adaptive":
+        file_name = json.dumps(config) + src
+    elif subtitle_type == "simple_opposite":
+        file_name = "simple_opposite+" + src
+    elif subtitle_type == "whole_background_level":
+        file_name = "whole_background_level" + src
+    outputDir = './videoOutput/%s' % src
+    if not os.path.exists(outputDir):
+        os.mkdir(outputDir)
     # file_name = "CIE1976-KeyFrameArbitraryColor-FixOutputBug-ExpFrameMeanDelta-distancestandard-60_translossbeta-0.2_DPcolor_tolerance-3-" + src
     # file_name = "white-" + src
     # file_name = "black-" + src
@@ -225,34 +252,40 @@ def newWork(*args):
                                             frame_height=frame_height,
                                             n_cluser=config["tune_num"])
 
+
     status = {}
-    previous_sub = None
-    for sub in subs:
-        start = time.time()
-        status[sub] = workOnSingleSub(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
-                                      color_analyzer=color_tune_analyzer, previous_sub=previous_sub,
-                                      log_statistics=log_statistics)
-        previous_sub = sub
-        print(sub, " : ", time.time() - start)
+    if subtitle_type == "adaptive" or subtitle_type == "whole_background_level":
+        previous_sub = None
+        for sub in subs:
+            start = time.time()
+            status[sub] = workOnSingleSub(cap=cap, now_sub=sub, palette=my_palette, font=font, k=k,
+                                          color_analyzer=color_tune_analyzer, previous_sub=previous_sub,
+                                          log_statistics=log_statistics, subtitle_type=subtitle_type)
+            previous_sub = sub
+            print(sub, " : ", time.time() - start)
+        # DP
+        DP_all_frames(status=status, subs=subs, palette=my_palette, log_statistics=log_statistics)
+        outputLog(log_statistics, file_path=os.path.join(outputDir, file_name + ".csv"))
+    elif subtitle_type == "simple_opposite":
+        for sub in subs:
+            start = time.time()
+            status[sub] = simpleOppositeOnSingleSub(cap, sub, font, k)
+            print(sub, " : ", time.time() - start)
+
 
     # output
-    outputDir = './videoOutput/%s' % src
-    if not os.path.exists(outputDir):
-        os.mkdir(outputDir)
     resultPath = os.path.join(outputDir, file_name + ".mp4")
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     # fourcc = cv.VideoWriter_fourcc(*"H264")
     videoWriter = cv.VideoWriter(resultPath, fourcc, fps, (frame_width, frame_height))
 
-    # DP
-    DP_all_frames(status=status, subs=subs, palette=my_palette, log_statistics=log_statistics)
 
     # add subtitle and output
     cap.set(cv.CAP_PROP_POS_FRAMES, 0)
     _, frame = cap.read()
     itr = iter(subs)
     nowSub = next(itr, None)
-    resColor = iter(status[nowSub]["DP_color"])
+    resColor = iter(status[nowSub]["chosen_color"])
     # resColor = iter(status[nowSub]["max_min_distance_color"])
     text = nowSub.text
 
@@ -267,7 +300,7 @@ def newWork(*args):
         ret, frame = cap.read()
         if ret:
             if frame_id % 100 == 0:
-                print("hello ", frame_id // 100)
+                print("Frame {} Complete!".format(frame_id))
 
             if nowSub is not None:
                 if frame_id >= nowSub.start and frame_id < nowSub.end:
@@ -287,7 +320,7 @@ def newWork(*args):
             if (nowSub is not None) and (frame_id >= nowSub.end):
                 nowSub = next(itr, None)
                 if nowSub is not None:
-                    resColor = iter(status[nowSub]["DP_color"])
+                    resColor = iter(status[nowSub]["chosen_color"])
                     # resColor = iter(status[nowSub]["max_min_distance_color"])
                     text = nowSub.text
                     im = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
@@ -297,18 +330,19 @@ def newWork(*args):
             videoWriter.release()
             break
     cap.release()
-    outputLog(log_statistics, file_path=os.path.join(outputDir, file_name + ".csv"))
     return 0
 
 
 
+if __name__ == "__main__":
+    # option: adaptive  simple_opposite, whole_background_level
+    # funcTime(newWork, 'YourName.mkv', 2, 40, "whole_background_level")
+    funcTime(newWork, 'rawColors.mp4', 5, 30, 'whole_background_level')
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
-
 # funcTime(newWork, 'rawColors.mp4', 5, 30, 'RdBu')
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 6, 50, '3d')
-funcTime(newWork, 'YourName.mkv', 2, 40, '3d')
 # funcTime(newWork, 'rawColors.mp4', 2, 24, '3d')
 # funcTime(newWork, 'BLACKPINK-Kill_This_Love.mp4', 2, 24, 'seismic')
 # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 6, 40, 'RdBu')
