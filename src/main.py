@@ -90,7 +90,7 @@ def workOnSingleSub(cap, now_sub, palette, font, k, color_analyzer, previous_sub
             else:
                 # now_sub.start - previous_sub.end <= config["MAX_FRAME_SKIP"]
                 pass
-        if subtitle_type == "adaptive":
+        if subtitle_type == "adaptive" or subtitle_type == "low_penalty":
             boxes = [cv.cvtColor(frame_image[chbox[1]: chbox[3], chbox[0]:chbox[2]], cv.COLOR_BGR2LAB) for chbox in chboxs]
         elif subtitle_type == "whole_background_level":
             y_min, x_min = chboxs.min(axis=0)[[0, 2]]
@@ -217,6 +217,8 @@ def newWork(srcName, k, fontSize, subtitle_type):
         file_name = "simple_opposite+" + src
     elif subtitle_type == "whole_background_level":
         file_name = "whole_background_level" + src
+    elif subtitle_type == "low_penalty":
+        file_name = "low_penalty" + src
     outputDir = './videoOutput/%s' % src
     if not os.path.exists(outputDir):
         os.mkdir(outputDir)
@@ -254,7 +256,7 @@ def newWork(srcName, k, fontSize, subtitle_type):
 
 
     status = {}
-    if subtitle_type == "adaptive" or subtitle_type == "whole_background_level":
+    if subtitle_type == "adaptive" or subtitle_type == "whole_background_level" or subtitle_type == "low_penalty":
         previous_sub = None
         for sub in subs:
             start = time.time()
@@ -263,9 +265,13 @@ def newWork(srcName, k, fontSize, subtitle_type):
                                           log_statistics=log_statistics, subtitle_type=subtitle_type)
             previous_sub = sub
             print(sub, " : ", time.time() - start)
-        # DP
-        DP_all_frames(status=status, subs=subs, palette=my_palette, log_statistics=log_statistics)
-        outputLog(log_statistics, file_path=os.path.join(outputDir, file_name + ".csv"))
+        if subtitle_type == "low_penalty":
+            for sub in subs:
+                status[sub]["chosen_color"] = status[sub]["max_min_distance_color"]
+        else:
+            # DP
+            DP_all_frames(status=status, subs=subs, palette=my_palette, log_statistics=log_statistics)
+            outputLog(log_statistics, file_path=os.path.join(outputDir, file_name + ".csv"))
     elif subtitle_type == "simple_opposite":
         for sub in subs:
             start = time.time()
@@ -335,9 +341,10 @@ def newWork(srcName, k, fontSize, subtitle_type):
 
 
 if __name__ == "__main__":
-    # option: adaptive  simple_opposite, whole_background_level
-    # funcTime(newWork, 'YourName.mkv', 2, 40, "whole_background_level")
-    funcTime(newWork, 'rawColors.mp4', 5, 30, 'whole_background_level')
+    # option: adaptive  simple_opposite, whole_background_level, low_penalty
+    funcTime(newWork, 'YourName.mkv', 2, 40, "low_penalty")
+    # funcTime(newWork, 'rawColors.mp4', 5, 30, 'whole_background_level')
+    # funcTime(newWork, 'TWICE-What_Is_Love.mp4', 6, 40, 'low_penalty')
 # funcTime(newWork, 'TimeLapseSwiss.mp4', 2, 45)
 # funcTime(newWork, 'rawColors.mp4', 5, 30, 'RdBu')
 # funcTime(tempTry, 'BLACKPINK-How_You_Like_That.flv', 5, 40)
